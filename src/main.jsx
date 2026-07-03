@@ -6,7 +6,14 @@ import {
   Navigate,
   createRoutesFromElements,
 } from "react-router-dom";
+import RoomDashboardPage from "./room_management/pages/RoomDashboardPage";
+
+/* ================= IMPORT TANSTACK QUERY ================= */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
+
+/* ================= APP COMPONENT ================= */
+import App from "./App"; // We now import App to handle the initial Auth check
 
 import { AllocationRoutes } from "./room_allocation";
 import WardenAllocationPage from "./room_allocation/pages/WardenAllocationPage";
@@ -57,11 +64,23 @@ function ErrorPage() {
   );
 }
 
+/* ================= INITIALIZE TANSTACK QUERY ================= */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Keep cache fresh for 5 minutes
+      refetchOnWindowFocus: false, // Do not refetch when switching browser tabs
+    },
+  },
+});
+
 /* ================= ROUTES ================= */
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/signin" />,
+    // Point the root to App.jsx so your auth and role redirection logic actually runs
+    element: <App />, 
+    errorElement: <ErrorPage />,
   },
   {
     path: "/signin",
@@ -149,6 +168,17 @@ const router = createBrowserRouter([
     element: <WardenAllocationPage />,
     errorElement: <ErrorPage />,
   },
+  // Added a temporary placeholder route for the Chief Warden
+  {
+    path: "/chief-warden",
+    element: <div>Chief Warden Dashboard - Coming Soon</div>,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/room-management",
+    element: <RoomDashboardPage />,
+    errorElement: <ErrorPage />,
+  },
   {
     path: "*",
     element: <ErrorPage />,
@@ -158,6 +188,9 @@ const router = createBrowserRouter([
 /* ================= RENDER ================= */
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    {/* Wrap the RouterProvider with QueryClientProvider */}
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>
 );
