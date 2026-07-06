@@ -40,6 +40,9 @@ import Dashboard from "./guard/Dashboard";
 import ExitPage from "./guard/ExitPage";
 import ReturnPage from "./guard/ReturnPage";
 
+
+import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
+import Warden from "./warden/warden";
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
   return (
@@ -159,6 +162,16 @@ const router = createBrowserRouter([
       { path: "room-grid", element: <WardenRoomGridTab /> },
       { path: "remaining", element: <WardenRemainingTab /> },
     ]
+  },
+  {
+    path: "/chief-warden",
+    element: <ChiefWardenAllocationPage />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/wardenhostel",
+    element: <Warden />,
+    errorElement: <ErrorPage />,
   },
   {
     path: "*",
