@@ -150,6 +150,11 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
+  path: "/chief-warden",
+  element: <Admin />,
+  errorElement: <ErrorPage />,
+},
+  {
     path: "*",
     element: <ErrorPage />,
   },

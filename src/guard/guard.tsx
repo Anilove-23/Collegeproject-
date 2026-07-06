@@ -21,6 +21,7 @@ interface OutpassData {
 }
 
 function Guard() {
+  
   // Pull guard info and token from localStorage
   const navigate = useNavigate();
   const userString = localStorage.getItem('user');

@@ -92,79 +92,55 @@ export default function App() {
 
   /* ================= ROLE REDIRECTS ================= */
 
-  switch (role) {
+ /* ================= ROLE REDIRECTS ================= */
 
-    case "student":
+switch (role) {
 
-      return (
-        <Navigate
-          to="/student"
-          replace
-        />
-      );
+  case "student":
+    return <Navigate to="/student" replace />;
 
-    case "attendant":
+  case "attendant":
+    return <Navigate to="/attendant" replace />;
 
-      return (
-        <Navigate
-          to="/attendant"
-          replace
-        />
-      );
+  case "guard":
+    return <Navigate to="/guard" replace />;
 
-    case "guard":
+  case "warden":
+    return <Navigate to="/warden" replace />;
 
-      return (
-        <Navigate
-          to="/guard"
-          replace
-        />
-      );
+  case "chief-warden":
+    return <Navigate to="/chief-warden" replace />;
 
-    default:
+  default:
 
-      /* INVALID ROLE */
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
 
-      localStorage.removeItem(
-        "token"
-      );
+    return (
 
-      localStorage.removeItem(
-        "role"
-      );
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
 
-      return (
+        <div className="bg-white border shadow-xl rounded-3xl p-10 max-w-md text-center">
 
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+          <h1 className="text-4xl font-bold text-red-600">
+            Invalid Role
+          </h1>
 
-          <div className="bg-white border shadow-xl rounded-3xl p-10 max-w-md text-center">
+          <p className="text-gray-500 mt-3">
+            Your session role is invalid or expired.
+          </p>
 
-            <h1 className="text-4xl font-bold text-red-600">
-
-              Invalid Role
-
-            </h1>
-
-            <p className="text-gray-500 mt-3">
-
-              Your session role is invalid or expired.
-
-            </p>
-
-            <button
-              onClick={() =>
-                window.location.reload()
-              }
-              className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
-            >
-
-              Login Again
-
-            </button>
-
-          </div>
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
+          >
+            Login Again
+          </button>
 
         </div>
-      );
-  }
+
+      </div>
+
+    );
+}
 }

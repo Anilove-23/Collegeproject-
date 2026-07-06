@@ -410,7 +410,7 @@ function Signup() {
 
             </option>
 
-            <option value="attendant">
+            {/* <option value="attendant">
 
               Attendant
 
@@ -420,7 +420,7 @@ function Signup() {
 
               Security Guard
 
-            </option>
+            </option> */}
 
           </select>
 

@@ -50,19 +50,23 @@ function Admin() {
 
   useEffect(() => {
     async function fetchData() {
-      const storedUserStr = localStorage.getItem('user');
-      if (!storedUserStr) {
-        navigate('/');
-        return;
-      }
+  const storedUserStr = localStorage.getItem("user");
 
-      const storedUser: StoredUser = JSON.parse(storedUserStr);
+if (!storedUserStr) {
+    navigate("/");
+    return;
+}
 
-      if (!storedUser?.token || storedUser.role !== 'attendant') {
-        navigate('/');
-        return;
-      }
+const storedUser: StoredUser = JSON.parse(storedUserStr);
 
+if (
+    storedUser.role !== "attendant" &&
+    storedUser.role !== "warden" &&
+    storedUser.role !== "chief-warden"
+) {
+    navigate("/");
+    return;
+}
       try {
         // Fetch attendant data
         const userResponse = await fetch('http://localhost:5000/auth/me', {

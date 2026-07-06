@@ -19,23 +19,29 @@ function Login() {
 
   /* ================= REDIRECT ================= */
 
-  const getRedirectPath = (
-    role
-  ) => {
+ const getRedirectPath = (role) => {
 
-    switch (role) {
+  switch (role) {
 
-      case "guard":
-        return "/guard";
+    case "student":
+      return "/student";
 
-      case "attendant":
-        return "/attendant";
+    case "attendant":
+      return "/attendant";
 
-      case "student":
-      default:
-        return "/student";
-    }
-  };
+    case "guard":
+      return "/guard";
+
+    case "warden":
+      return "/warden";
+
+    case "chief-warden":
+      return "/chief-warden";
+
+    default:
+      return "/student";
+  }
+};
 
   /* ================= STATE ================= */
 
@@ -46,7 +52,7 @@ function Login() {
 
       password: "",
 
-      role: "student",
+      // role: "student",
     });
 
   const [error, setError] =
@@ -69,29 +75,29 @@ function Login() {
 
   /* ================= CHECK AUTH ================= */
 
-  useEffect(() => {
+  // useEffect(() => {
 
-    const token =
-      localStorage.getItem(
-        "token"
-      );
+  //   const token =
+  //     localStorage.getItem(
+  //       "token"
+  //     );
 
-    const role =
-      localStorage.getItem(
-        "role"
-      );
+  //   const role =
+  //     localStorage.getItem(
+  //       "role"
+  //     );
 
-    if (
-      token &&
-      role
-    ) {
+  //   if (
+  //     token &&
+  //     role
+  //   ) {
 
-      navigate(
-        getRedirectPath(role)
-      );
-    }
+  //     navigate(
+  //       getRedirectPath(role)
+  //     );
+  //   }
 
-  }, [navigate]);
+  // }, [navigate]);
 
   /* ================= LOGIN ================= */
 
@@ -102,8 +108,8 @@ function Login() {
 
       if (
         !formData.email ||
-        !formData.password ||
-        !formData.role
+        !formData.password 
+        // !formData.role
       ) {
 
         setError(
@@ -133,32 +139,31 @@ function Login() {
                 password:
                   formData.password,
 
-                role:
-                  formData.role,
+                // role:
+                //   formData.role,
               }),
             }
           );
 
-        localStorage.setItem(
-          "token",
-          data.token
-        );
+const role = data.role || "student";
 
-        localStorage.setItem(
-          "role",
-          formData.role
-        );
+localStorage.setItem("token", data.token);
+localStorage.setItem("role", role);
 
-        localStorage.setItem(
-          "user",
-          JSON.stringify(
-            data.user
-          )
-        );
+localStorage.setItem(
+  "user",
+  JSON.stringify({
+    ...data.user,
+    token: data.token,
+    role: role,
+  })
+);
+
+navigate(getRedirectPath(role));
 
         navigate(
           getRedirectPath(
-            formData.role
+            role
           )
         );
 
@@ -267,7 +272,7 @@ function Login() {
 
           {/* ROLE */}
 
-          <select
+          {/* <select
             name="role"
             value={formData.role}
             onChange={handleChange}
@@ -292,7 +297,7 @@ function Login() {
 
             </option>
 
-          </select>
+          </select> */}
 
           {/* BUTTON */}
 
