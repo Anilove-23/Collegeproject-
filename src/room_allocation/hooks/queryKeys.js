@@ -16,6 +16,8 @@ export const roomKeys = {
     list:   (hostelId) => ['rooms', hostelId],
     /** Single room: roomKeys.detail(roomId) */
     detail: (roomId)   => ['room', roomId],
+    /** Filters for a hostel: roomKeys.filters(hostelId) */
+    filters: (hostelId) => ['room-filters', hostelId],
 };
 
 // ── Groups / Squads ───────────────────────────────────────────────────────────

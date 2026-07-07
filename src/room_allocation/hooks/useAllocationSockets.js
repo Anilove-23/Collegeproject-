@@ -33,8 +33,9 @@ import { roomKeys, groupKeys, preferenceKeys, phaseKeys, batchKeys } from './que
  * @param {string|null} params.studentId  — current student
  * @param {string|null} params.hostelId   — hostel the student belongs to
  * @param {string|null} params.groupId    — current group (if any)
+ * @param {Function}    params.navigate   — react-router navigate fn
  */
-export function useAllocationSockets({ studentId, hostelId, groupId } = {}) {
+export function useAllocationSockets({ studentId, hostelId, groupId, navigate } = {}) {
     useEffect(() => {
         // ── ROOM_MAP_UPDATED ──────────────────────────────────────────
         const onRoomMapUpdated = (payload) => {
@@ -63,7 +64,7 @@ export function useAllocationSockets({ studentId, hostelId, groupId } = {}) {
         };
 
         // ── EVALUATION_DONE ───────────────────────────────────────────
-        const onEvaluationDone = () => {
+        const onEvaluationDone = (payload) => {
             if (studentId) {
                 queryClient.invalidateQueries({ queryKey: batchKeys.current(studentId) });
                 queryClient.invalidateQueries({ queryKey: phaseKeys.current(studentId) });
@@ -72,6 +73,27 @@ export function useAllocationSockets({ studentId, hostelId, groupId } = {}) {
             if (groupId) {
                 queryClient.invalidateQueries({ queryKey: groupKeys.detail(groupId) });
                 queryClient.invalidateQueries({ queryKey: groupKeys.members(groupId) });
+            }
+
+            // ── Shatter redirect ─────────────────────────────────────
+            // If this event is a shatter and the current student is one
+            // of the affected members, navigate them immediately.
+            if (
+                payload?.type === 'SHATTERED' &&
+                navigate &&
+                studentId
+            ) {
+                const memberIds = payload.memberIds ?? [];
+                // memberIds from backend are integers; studentId may be string
+                const isAffected = memberIds.some(
+                    (id) => String(id) === String(studentId)
+                );
+                if (isAffected) {
+                    navigate('/allocation/shattered', {
+                        replace: true,
+                        state: { reason: payload.reason },
+                    });
+                }
             }
         };
 

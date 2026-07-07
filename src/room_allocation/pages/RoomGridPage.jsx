@@ -2,6 +2,7 @@ import { useState, useMemo } from 'react';
 import AllocationLayout from '../layouts/AllocationLayout';
 import { useActiveBatch } from '../hooks/useActiveBatch';
 import { useRooms } from '../hooks/useRooms';
+import { useRoomFilters } from '../hooks/useRoomFilters';
 import RoomFilters from '../components/live_selection/RoomFilters';
 
 export default function RoomGridPage() {
@@ -18,6 +19,10 @@ export default function RoomGridPage() {
     status: 'All Rooms',
     search: '',
   });
+
+  const { data: filtersData } = useRoomFilters(allocState?.hostelId ?? null);
+  const availableTypes = filtersData?.availableTypes || [];
+  const availableBlocks = filtersData?.availableBlocks || [];
 
   const filteredRooms = useMemo(() => {
     return rooms.filter((room) => {
@@ -67,7 +72,12 @@ export default function RoomGridPage() {
             <h1 className="text-[20px] font-black text-text-primary tracking-tight">Live Room Grid</h1>
             <p className="text-[12px] text-text-muted mt-1">Interactive map of all rooms and their real-time availability.</p>
           </div>
-          <RoomFilters filters={filters} onChange={setFilters} />
+          <RoomFilters 
+            filters={filters} 
+            onChange={setFilters} 
+            availableTypes={availableTypes}
+            availableBlocks={availableBlocks}
+          />
         </div>
 
         {Object.keys(groupedRooms).length === 0 ? (

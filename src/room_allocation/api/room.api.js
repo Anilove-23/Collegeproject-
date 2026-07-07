@@ -60,3 +60,12 @@ export const getRoomOccupancy = async (id) => {
   const r = normaliseRoom(data.room ?? data);
   return { id, occupied: r.occupied, total: r.total };
 };
+
+/** Get room filters (cached from backend). */
+export const getRoomFilters = async (hostelId) => {
+  const data = await client.get(`/allocation/filters/${hostelId}`);
+  return {
+    availableTypes: data.availableTypes || [],
+    availableBlocks: data.availableBlocks || [],
+  };
+};

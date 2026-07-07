@@ -1,9 +1,9 @@
-const TYPES  = ['All Types', '4-Seater', '2-Seater'];
-const BLOCKS = ['All Blocks', 'A', 'B', 'C', 'D'];
 const STATUS = ['All Rooms', 'Available Only'];
 
 /** Filter bar for the room grid */
-export default function RoomFilters({ filters, onChange }) {
+export default function RoomFilters({ filters, onChange, availableTypes = [], availableBlocks = [] }) {
+  const TYPES  = ['All Types', ...availableTypes];
+  const BLOCKS = ['All Blocks', ...availableBlocks];
   const set = (key, val) => onChange({ ...filters, [key]: val });
 
   return (

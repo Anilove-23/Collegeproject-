@@ -8,4 +8,5 @@ export {
     getAvailableRooms,
     getRoomDetails,
     getRoomOccupancy,
+    getRoomFilters,
 } from './room.api.js';

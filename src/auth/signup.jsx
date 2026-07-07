@@ -305,7 +305,7 @@ payload = {
 
         const data =
           await apiFetch(
-            "/auth/signup",
+            "/api/auth/signup",
             {
               method: "POST",
 

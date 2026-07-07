@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
 import TopNav from '../components/shared/TopNav';
 import { allocationSocket } from '../sockets/allocation.socket.js';
 import { useActiveBatch } from '../hooks/useActiveBatch';
@@ -79,12 +79,15 @@ export default function AllocationLayout({
   const [showPopup, setShowPopup] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  const navigate = useNavigate();
+
   // ── Centralized Pusher → TanStack Query bridge ────────────────
   // Mount once here so ALL child pages share one set of listeners.
   useAllocationSockets({
     studentId,
     hostelId: hostelId ?? allocState?.hostelId ?? null,
     groupId:  allocState?.groupId ?? null,
+    navigate,
   });
 
   const isLiveTurn = allocState?.batchActive && !allocState?.submitted && !allocState?.isAllocated;
