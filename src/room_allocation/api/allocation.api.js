@@ -17,6 +17,7 @@ function normaliseStatus(raw) {
   return {
     // Phase
     phase,
+    eventId:             r.event_id ?? null,
     hostelId:            r.hostel_id ?? null,
     hostelName:          r.hostel_name ?? null,
     isPaused:            r.is_paused ?? false,

@@ -68,14 +68,14 @@ export default function AllocationLayout({
     return () => allocationSocket.disconnect();
   }, []);
 
-  // Join/switch hostel room whenever hostelId changes
-  useEffect(() => {
-    if (hostelId) allocationSocket.joinHostel(hostelId);
-  }, [hostelId]);
-
   const userStr = localStorage.getItem('user');
   const studentId = userStr ? JSON.parse(userStr).id : null;
   const { data: allocState } = useActiveBatch(studentId);
+
+  // Join/switch event room whenever eventId changes
+  useEffect(() => {
+    if (allocState?.eventId) allocationSocket.joinHostel(allocState.eventId);
+  }, [allocState?.eventId]);
   const [showPopup, setShowPopup] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
@@ -85,6 +85,7 @@ export default function AllocationLayout({
   // Mount once here so ALL child pages share one set of listeners.
   useAllocationSockets({
     studentId,
+    eventId:  allocState?.eventId ?? null,
     hostelId: hostelId ?? allocState?.hostelId ?? null,
     groupId:  allocState?.groupId ?? null,
     navigate,

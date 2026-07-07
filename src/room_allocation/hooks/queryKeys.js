@@ -54,10 +54,12 @@ export const batchKeys = {
 
 // ── Admin ─────────────────────────────────────────────────────────────────────
 export const adminKeys = {
+    /** All allocation events: adminKeys.events() */
+    events: () => ['admin-events'],
     /** All hostels list (admin view): adminKeys.hostels() */
     hostels: () => ['admin-hostels'],
     /** All hostels with their rooms (pool configurator): adminKeys.hostelsWithRooms() */
     hostelsWithRooms: () => ['admin-hostels-with-rooms'],
-    /** Current pool config for a FROM hostel: adminKeys.pool(fromHostelId) */
-    pool: (fromHostelId) => ['admin-pool', fromHostelId],
+    /** Current pool config for an event: adminKeys.pool(eventId) */
+    pool: (eventId) => ['admin-pool', eventId],
 };

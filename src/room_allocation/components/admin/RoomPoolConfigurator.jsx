@@ -12,18 +12,17 @@
  *
  * Props:
  *   fromHostelId  — UUID of the source (FROM) hostel
- *   allocationDate — currently selected date string (YYYY-MM-DD)
+ *   eventId        — UUID of the event
  *   onSaved(result) — callback after a successful save
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
 import { adminKeys } from '../../hooks/queryKeys.js';
-import { getHostelsWithRooms, getAllocationPool } from '../../api/admin.api.js';
-import { useSetAllocationPool } from '../../mutations/useSetAllocationPool.js';
+import { getHostelsWithRooms, getEventPool, setEventRooms } from '../../api/admin.api.js';
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onSaved }) {
+export default function RoomPoolConfigurator({ eventId, onSaved }) {
     const [pool, setPool]                 = useState({});   // { hostelId: Set<roomId> }
     const [expandedHostel, setExpandedHostel] = useState(null);
 
@@ -42,9 +41,9 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
         data: existingPool,
         isLoading: loadingPool,
     } = useQuery({
-        queryKey: adminKeys.pool(fromHostelId),
-        queryFn:  () => getAllocationPool(fromHostelId),
-        enabled:  !!fromHostelId,
+        queryKey: adminKeys.pool(eventId),
+        queryFn:  () => getEventPool(eventId),
+        enabled:  !!eventId,
         staleTime: 30_000,
     });
 
@@ -59,10 +58,11 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
             rebuilt[h.hostelId] = new Set(h.rooms.map(r => r.id));
         }
         setPool(rebuilt);
-    }, [existingPool, fromHostelId]);
+    }, [existingPool, eventId]);
 
     // ── Mutation ──────────────────────────────────────────────────────────────
-    const { mutate: savePool, isPending: saving, error: saveError } = useSetAllocationPool({
+    const { mutate: savePool, isPending: saving, error: saveError } = useMutation({
+        mutationFn: (payload) => setEventRooms(eventId, payload),
         onSuccess: onSaved,
     });
 
@@ -120,10 +120,7 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
                 if (s.size === 0) delete next[hostelId];
                 else next[hostelId] = s;
             } else {
-                // Select them all (only available/unfilled? the user didn't specify to exclude full rooms, 
-                // but usually the room tile itself becomes unclickable if full.
-                // However, selecting a full room is technically possible if engine just skips it.
-                // Let's just toggle them all like the hostel toggle does.)
+                // Select them all 
                 for (const r of roomsInBlock) s.add(r.id);
                 next[hostelId] = s;
             }
@@ -133,11 +130,11 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
 
     // ── Save handler ──────────────────────────────────────────────────────────
     const handleSave = () => {
-        if (!fromHostelId || !allocationDate || totalSelectedRooms === 0) return;
+        if (!eventId || totalSelectedRooms === 0) return;
         const hostels = Object.entries(pool)
             .filter(([, s]) => s.size > 0)
             .map(([hostelId, s]) => ({ hostelId, rooms: [...s] }));
-        savePool({ fromHostelId, allocationDate, hostels });
+        savePool({ hostels });
     };
 
     // ── Render ────────────────────────────────────────────────────────────────
@@ -152,7 +149,8 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
     }
 
     const loadError = hostelsError?.message;
-    const toHostels = allHostels.filter(h => String(h.id) !== String(fromHostelId));
+    // For year-based events, ALL hostels are theoretically selectable.
+    const toHostels = allHostels;
 
     return (
         <div className="flex flex-col gap-3">
@@ -174,7 +172,7 @@ export default function RoomPoolConfigurator({ fromHostelId, allocationDate, onS
                 <button
                     id="save-room-pool-btn"
                     onClick={handleSave}
-                    disabled={saving || totalSelectedRooms === 0 || !allocationDate}
+                    disabled={saving || totalSelectedRooms === 0}
                     className="ml-auto px-4 py-1.5 rounded bg-indigo-600 hover:bg-indigo-700 text-white
                         text-[11px] font-bold tracking-widest disabled:opacity-40 transition-colors"
                 >

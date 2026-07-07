@@ -38,11 +38,13 @@ export async function apiFetch(
 
   /* ================= AUTO LOGOUT ================= */
 
-  if (
-    response.status === 401 ||
-    // response.status === 400 ||
+  // Do not trigger auto logout on login or signup endpoints
+  const isAuthEndpoint = endpoint.includes('/api/auth/login') || endpoint.includes('/api/auth/signup');
 
-    response.status === 403
+  if (
+    !isAuthEndpoint &&
+    (response.status === 401 ||
+    response.status === 403)
   ) {
 
     localStorage.clear();
