@@ -121,7 +121,7 @@ function Login() {
 
         const data =
           await apiFetch(
-            "/auth/login",
+            "/api/auth/login",
             {
               method: "POST",
 
