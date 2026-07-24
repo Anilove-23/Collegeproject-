@@ -19,6 +19,10 @@ import WardenRemainingTab from "./room_allocation/pages/WardenRemainingTab";
 import Login from "./auth/login";
 import Signup from "./auth/signup";
 
+/* ================= FACE RECOGNITION ================= */
+import EnrollFace from "./face_recognition/EnrollFace";
+import VerifyFace from "./face_recognition/VerifyFace";
+
 /* ================= STUDENT ================= */
 import OutpassLayout from "./student/outpasses";
 
@@ -78,6 +82,16 @@ const router = createBrowserRouter([
   {
     path: "/signup",
     element: <Signup />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/face/enroll",
+    element: <EnrollFace />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/face/verify",
+    element: <VerifyFace />,
     errorElement: <ErrorPage />,
   },
   {
