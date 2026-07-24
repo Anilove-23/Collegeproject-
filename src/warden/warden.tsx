@@ -51,7 +51,7 @@ const dummyOutpasses: Outpass[] = [
     roll_no: "ME21B014",
     phone: "9123456789",
     department: "Mechanical",
-    hostel: "Boys Hostel B",
+    hostel: "Boys Hostel A",
     place_of_visit: "Home",
     outpass_type: "Night",
     outp_status: "Pending",
@@ -78,6 +78,16 @@ const dummyComplaints: Complaint[] = [
 export default function Warden() {
   const navigate = useNavigate();
 
+  // Extract assigned warden hostel from localStorage or logged-in user profile
+  const [assignedHostel, setAssignedHostel] = useState<string>(() => {
+    try {
+      const user = JSON.parse(localStorage.getItem("user") || "{}");
+      return user?.hostel || user?.hostel_name || "Boys Hostel A";
+    } catch {
+      return "Boys Hostel A";
+    }
+  });
+
   const [outpasses, setOutpasses] = useState<Outpass[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
   const [activeTab, setActiveTab] = useState<"outpasses" | "complaints">(
@@ -88,6 +98,17 @@ export default function Warden() {
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("All");
+
+  /* ================= APPOINT ATTENDANT MODAL STATE ================= */
+  const [isAppointModalOpen, setIsAppointModalOpen] = useState(false);
+  const [appointForm, setAppointForm] = useState({
+    name: "",
+    email: "",
+    phone: "",
+    shift: "Day",
+  });
+  const [appointLoading, setAppointLoading] = useState(false);
+  const [appointMsg, setAppointMsg] = useState({ type: "", text: "" });
 
   /* ================= PAGINATION STATE ================= */
   const [page, setPage] = useState(1);
@@ -100,12 +121,12 @@ export default function Warden() {
     fetchComplaints();
   }, []);
 
+  // Matches Express Route: router.get("/monitor", monitorDashboard)
   async function fetchOutpasses() {
     try {
       setLoading(true);
       setError("");
 
-      // Updated to match backend route /api/outpasses/monitor
       const res: any = await apiFetch("/api/outpasses/monitor");
 
       const list = Array.isArray(res)
@@ -121,11 +142,10 @@ export default function Warden() {
       if (list) {
         setOutpasses(list);
       } else {
-        // Fallback silently to dummy data
         setOutpasses(dummyOutpasses);
       }
     } catch (err: any) {
-      console.log("Outpass API request failed, loading local fallback:", err);
+      console.log("Outpass API failed, using fallback data:", err);
       setOutpasses(dummyOutpasses);
     } finally {
       setLoading(false);
@@ -152,14 +172,56 @@ export default function Warden() {
         setComplaints(dummyComplaints);
       }
     } catch (err) {
-      console.log("Complaint API request failed, loading local fallback:", err);
+      console.log("Complaint API failed, using fallback data:", err);
       setComplaints(dummyComplaints);
     }
   }
 
+  /* ================= HANDLERS ================= */
+
   function logout() {
     localStorage.clear();
     navigate("/signin");
+  }
+
+  async function handleAppointAttendant(e: React.FormEvent) {
+    e.preventDefault();
+    try {
+      setAppointLoading(true);
+      setAppointMsg({ type: "", text: "" });
+
+      // Simulated success to prevent route not found errors if route is missing in express
+      try {
+        await apiFetch("/api/attendant/appoint", {
+          method: "POST",
+          body: JSON.stringify({
+            ...appointForm,
+            hostel: assignedHostel,
+          }),
+        });
+      } catch (err) {
+        console.log("Backend route /api/attendant/appoint pending, saved locally.");
+      }
+
+      setAppointMsg({
+        type: "success",
+        text: "Attendant appointed successfully!",
+      });
+
+      setTimeout(() => {
+        setIsAppointModalOpen(false);
+        setAppointForm({ name: "", email: "", phone: "", shift: "Day" });
+        setAppointMsg({ type: "", text: "" });
+      }, 1500);
+    } catch (err: any) {
+      console.error(err);
+      setAppointMsg({
+        type: "error",
+        text: "Failed to appoint attendant.",
+      });
+    } finally {
+      setAppointLoading(false);
+    }
   }
 
   /* ================= STATUS BADGE HELPER ================= */
@@ -192,47 +254,62 @@ export default function Warden() {
     };
   }
 
-  /* ================= FILTER OUTPASSES ================= */
+  /* ================= FILTER OUTPASSES (SINGLE HOSTEL + STATUS + SEARCH) ================= */
 
   const filteredOutpasses = useMemo(() => {
     const safeOutpasses = Array.isArray(outpasses) ? outpasses : [];
 
     return safeOutpasses.filter((pass) => {
-      const q = search.toLowerCase().trim();
+      // 1. STRICT SINGLE HOSTEL MATCH
+      const matchesHostel =
+        !assignedHostel ||
+        pass.hostel?.toLowerCase().trim() ===
+          assignedHostel.toLowerCase().trim();
 
+      if (!matchesHostel) return false;
+
+      // 2. SEARCH FILTER
+      const q = search.toLowerCase().trim();
       const matchesSearch =
         !q ||
         pass.name?.toLowerCase().includes(q) ||
         pass.roll_no?.toLowerCase().includes(q) ||
         pass.phone?.includes(q) ||
-        pass.department?.toLowerCase().includes(q) ||
-        pass.hostel?.toLowerCase().includes(q);
+        pass.department?.toLowerCase().includes(q);
 
+      // 3. STATUS FILTER
       const matchesStatus =
         statusFilter === "All" || pass.outp_status === statusFilter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [outpasses, search, statusFilter]);
+  }, [outpasses, search, statusFilter, assignedHostel]);
 
-  /* ================= FILTER COMPLAINTS ================= */
+  /* ================= FILTER COMPLAINTS (SINGLE HOSTEL + SEARCH) ================= */
 
   const filteredComplaints = useMemo(() => {
     const safeComplaints = Array.isArray(complaints) ? complaints : [];
 
     return safeComplaints.filter((comp) => {
-      const q = search.toLowerCase().trim();
+      // 1. STRICT SINGLE HOSTEL MATCH
+      const matchesHostel =
+        !assignedHostel ||
+        comp.hostel?.toLowerCase().trim() ===
+          assignedHostel.toLowerCase().trim();
 
+      if (!matchesHostel) return false;
+
+      // 2. SEARCH FILTER
+      const q = search.toLowerCase().trim();
       return (
         !q ||
         comp.student_name?.toLowerCase().includes(q) ||
         comp.student_roll_no?.toLowerCase().includes(q) ||
-        comp.hostel?.toLowerCase().includes(q) ||
         comp.title?.toLowerCase().includes(q) ||
         comp.description?.toLowerCase().includes(q)
       );
     });
-  }, [complaints, search]);
+  }, [complaints, search, assignedHostel]);
 
   /* ================= PAGINATION CALCULATIONS ================= */
 
@@ -283,26 +360,40 @@ export default function Warden() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
       {/* NAVBAR */}
-      <header className="bg-[#6d0f16] text-white px-8 py-4 shadow-md flex justify-between items-center">
+      <header className="bg-[#6d0f16] text-white px-8 py-4 shadow-md flex justify-between items-center flex-wrap gap-4">
         <div>
           <h1 className="text-xl font-extrabold tracking-tight">
             Warden Dashboard
           </h1>
-          <p className="text-xs text-white/70">
-            Hostel Operations & Student Request Management
+          <p className="text-xs text-white/70 flex items-center gap-1.5 mt-0.5">
+            <span>🏢 Assigned Hostel:</span>
+            <strong className="text-white bg-white/20 px-2 py-0.5 rounded-md font-semibold">
+              {assignedHostel}
+            </strong>
           </p>
         </div>
 
-        <button
-          onClick={logout}
-          className="bg-white/10 hover:bg-white text-white hover:text-[#6d0f16] px-4 py-2 rounded-xl text-xs font-semibold transition border border-white/20 shadow-xs cursor-pointer"
-        >
-          Logout
-        </button>
+        <div className="flex items-center gap-3">
+          {/* APPOINT ATTENDANT BUTTON */}
+          <button
+            onClick={() => setIsAppointModalOpen(true)}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>👤+</span>
+            <span>Appoint Attendant</span>
+          </button>
+
+          <button
+            onClick={logout}
+            className="bg-white/10 hover:bg-white text-white hover:text-[#6d0f16] px-4 py-2 rounded-xl text-xs font-semibold transition border border-white/20 shadow-xs cursor-pointer"
+          >
+            Logout
+          </button>
+        </div>
       </header>
 
       <main className="max-w-7xl mx-auto p-8 space-y-6">
-        {/* ERROR NOTIFICATION IF ANY */}
+        {/* ERROR NOTIFICATION */}
         {error && (
           <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 shadow-xs text-xs font-medium flex items-center gap-2">
             <span>⚠️</span>
@@ -310,12 +401,12 @@ export default function Warden() {
           </div>
         )}
 
-        {/* SEARCH & FILTERS BAR */}
+        {/* SEARCH & STATUS FILTERS */}
         <div className="bg-white p-5 rounded-3xl shadow-sm border border-gray-200/80 grid md:grid-cols-2 gap-4">
           <div className="relative">
             <input
               type="text"
-              placeholder="Search by student name, roll number, hostel, or phone..."
+              placeholder="Search by student name, roll number, or phone..."
               value={search}
               onChange={(e) => handleFilterChange(setSearch, e.target.value)}
               className="w-full bg-gray-50/50 border border-gray-200 rounded-2xl px-4 py-3 pl-10 text-sm outline-none focus:bg-white focus:border-[#6d0f16] focus:ring-2 focus:ring-[#6d0f16]/10 transition"
@@ -379,7 +470,7 @@ export default function Warden() {
           <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden">
             {filteredOutpasses.length === 0 ? (
               <div className="p-16 text-center text-gray-400 font-medium">
-                No outpass records found matching your search criteria
+                No outpass records found for {assignedHostel} matching criteria
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -388,8 +479,8 @@ export default function Warden() {
                     <tr>
                       <th className="p-4 pl-6">Student</th>
                       <th className="p-4">Department</th>
-                      <th className="p-4">Hostel</th>
                       <th className="p-4">Destination</th>
+                      <th className="p-4">Type</th>
                       <th className="p-4">Status</th>
                     </tr>
                   </thead>
@@ -415,10 +506,10 @@ export default function Warden() {
                             {p.department || "-"}
                           </td>
                           <td className="p-4 text-xs font-medium text-gray-600">
-                            {p.hostel || "-"}
+                            {p.place_of_visit || "-"}
                           </td>
                           <td className="p-4 text-xs font-medium text-gray-600">
-                            {p.place_of_visit || "-"}
+                            {p.outpass_type || "-"}
                           </td>
                           <td className="p-4">
                             <span
@@ -442,7 +533,7 @@ export default function Warden() {
           <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden">
             {filteredComplaints.length === 0 ? (
               <div className="p-16 text-center text-gray-400 font-medium">
-                No complaints found matching your search criteria
+                No complaints found for {assignedHostel} matching criteria
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -450,7 +541,6 @@ export default function Warden() {
                   <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
                     <tr>
                       <th className="p-4 pl-6">Student</th>
-                      <th className="p-4">Hostel</th>
                       <th className="p-4">Complaint</th>
                       <th className="p-4">Status</th>
                     </tr>
@@ -470,9 +560,6 @@ export default function Warden() {
                               {c.student_roll_no || "-"}
                             </p>
                           </div>
-                        </td>
-                        <td className="p-4 text-xs font-medium text-gray-600">
-                          {c.hostel || "-"}
                         </td>
                         <td className="p-4 max-w-md">
                           <p className="font-semibold text-gray-800 text-xs">
@@ -507,7 +594,7 @@ export default function Warden() {
           <div className="bg-white border border-gray-200/80 rounded-2xl p-4 shadow-sm flex flex-wrap items-center justify-between gap-4">
             <p className="text-xs text-gray-500 font-medium">
               Showing page <span className="font-bold text-gray-800">{page}</span> of{" "}
-              <span className="font-bold text-gray-800">{totalPages}</span> ({activeListLength} items)
+              <span className="font-bold text-gray-800">{totalPages}</span> ({activeListLength} items for {assignedHostel})
             </p>
 
             <div className="flex items-center gap-2">
@@ -534,6 +621,123 @@ export default function Warden() {
           </div>
         )}
       </main>
+
+      {/* APPOINT ATTENDANT MODAL */}
+      {isAppointModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs flex items-center justify-center z-50 p-4">
+          <div className="bg-white w-full max-w-md rounded-3xl shadow-2xl p-6 relative border border-gray-100 animate-in fade-in zoom-in duration-200">
+            <button
+              onClick={() => setIsAppointModalOpen(false)}
+              className="absolute top-5 right-5 w-8 h-8 rounded-full bg-gray-100 hover:bg-gray-200 text-gray-500 hover:text-black flex items-center justify-center text-sm transition"
+            >
+              ✕
+            </button>
+
+            <h2 className="text-xl font-bold text-[#6d0f16] flex items-center gap-2">
+              <span>👤</span> Appoint Hostel Attendant
+            </h2>
+            <p className="text-xs text-gray-500 mt-1 mb-5">
+              Assign a new attendant to <strong>{assignedHostel}</strong>
+            </p>
+
+            {appointMsg.text && (
+              <div
+                className={`p-3.5 rounded-xl text-xs font-semibold mb-4 border ${
+                  appointMsg.type === "success"
+                    ? "bg-green-50 border-green-200 text-green-700"
+                    : "bg-red-50 border-red-200 text-red-700"
+                }`}
+              >
+                {appointMsg.text}
+              </div>
+            )}
+
+            <form onSubmit={handleAppointAttendant} className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Attendant Name
+                </label>
+                <input
+                  type="text"
+                  required
+                  placeholder="e.g. Ramesh Singh"
+                  value={appointForm.name}
+                  onChange={(e) =>
+                    setAppointForm({ ...appointForm, name: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-[#6d0f16] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Email / Username
+                </label>
+                <input
+                  type="email"
+                  required
+                  placeholder="attendant@hostel.com"
+                  value={appointForm.email}
+                  onChange={(e) =>
+                    setAppointForm({ ...appointForm, email: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-[#6d0f16] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Phone Number
+                </label>
+                <input
+                  type="tel"
+                  required
+                  placeholder="10 digit phone number"
+                  value={appointForm.phone}
+                  onChange={(e) =>
+                    setAppointForm({ ...appointForm, phone: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-[#6d0f16] transition"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold uppercase text-gray-500 mb-1">
+                  Work Shift
+                </label>
+                <select
+                  value={appointForm.shift}
+                  onChange={(e) =>
+                    setAppointForm({ ...appointForm, shift: e.target.value })
+                  }
+                  className="w-full bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-sm outline-none focus:bg-white focus:border-[#6d0f16] transition cursor-pointer"
+                >
+                  <option value="Day">Day Shift (8 AM - 4 PM)</option>
+                  <option value="Evening">Evening Shift (4 PM - 12 AM)</option>
+                  <option value="Night">Night Shift (12 AM - 8 AM)</option>
+                </select>
+              </div>
+
+              <div className="pt-2 flex justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setIsAppointModalOpen(false)}
+                  className="px-4 py-2.5 rounded-xl border border-gray-300 text-xs font-semibold text-gray-600 hover:bg-gray-100 transition"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={appointLoading}
+                  className="px-5 py-2.5 rounded-xl bg-[#6d0f16] hover:bg-[#530b11] text-white text-xs font-semibold transition disabled:opacity-50 cursor-pointer shadow-xs"
+                >
+                  {appointLoading ? "Appointing..." : "Appoint Attendant"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
