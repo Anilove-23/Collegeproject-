@@ -118,6 +118,8 @@ function Signup() {
 
       case "attendant":
         return "/attendant";
+      case "warden":
+        return "/wardenhostel";
 
       case "student":
       default:
@@ -268,7 +270,7 @@ function Signup() {
           };
         }
 
-        else {
+        else if(formData.role === "guard"){
 
           payload = {
 
@@ -282,12 +284,28 @@ function Signup() {
               formData.password,
 
             phone: formData.phone,
+          }
+        }else{
+payload = {
+
+            role: "warden",
+
+            name: formData.name,
+
+            email: formData.email,
+
+            password:
+              formData.password,
+
+            phone: formData.phone,
+            hostel:
+              formData.hostel,
+          }
           };
-        }
 
         const data =
           await apiFetch(
-            "/auth/signup",
+            "/api/auth/signup",
             {
               method: "POST",
 
@@ -420,7 +438,12 @@ function Signup() {
 
               Security Guard
 
-            </option> */}
+            </option>
+             <option value="warden">
+
+              warden
+
+            </option>
 
           </select>
 

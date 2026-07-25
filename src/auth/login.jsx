@@ -127,7 +127,7 @@ function Login() {
 
         const data =
           await apiFetch(
-            "/auth/login",
+            "/api/auth/login",
             {
               method: "POST",
 
@@ -293,6 +293,11 @@ navigate(getRedirectPath(role));
             <option value="guard">
 
               Security Guard
+
+            </option>
+            <option value="warden">
+
+              warden
 
             </option>
 
