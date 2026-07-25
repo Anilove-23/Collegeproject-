@@ -145,6 +145,11 @@ function Login() {
             }
           );
 
+if (data.success && data.message === "OTP generated") {
+  navigate("/verify-otp", { state: { email: formData.email } });
+  return;
+}
+
 const role = data.role || "student";
 
 localStorage.setItem("token", data.token);
@@ -160,12 +165,6 @@ localStorage.setItem(
 );
 
 navigate(getRedirectPath(role));
-
-        navigate(
-          getRedirectPath(
-            role
-          )
-        );
 
       } catch (err) {
 

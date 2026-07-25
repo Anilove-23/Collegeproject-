@@ -14,6 +14,7 @@ import WardenAllocationPage from "./room_allocation/pages/WardenAllocationPage";
 /* ================= AUTH ================= */
 import Login from "./auth/login";
 import Signup from "./auth/signup";
+import OtpVerification from "./auth/OtpVerification";
 
 /* ================= STUDENT ================= */
 import OutpassLayout from "./student/outpasses";
@@ -71,6 +72,11 @@ const router = createBrowserRouter([
   {
     path: "/signup",
     element: <Signup />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/verify-otp",
+    element: <OtpVerification />,
     errorElement: <ErrorPage />,
   },
   {
