@@ -4,7 +4,6 @@ import {
   createBrowserRouter,
   RouterProvider,
   Navigate,
-  createRoutesFromElements,
 } from "react-router-dom";
 import RoomDashboardPage from "./room_management/pages/RoomDashboardPage";
 
@@ -43,19 +42,22 @@ import Dashboard from "./guard/Dashboard";
 import ExitPage from "./guard/ExitPage";
 import ReturnPage from "./guard/ReturnPage";
 
+import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
+import Warden from "./warden/warden";
+
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
-      <div className="bg-white shadow-xl rounded-3xl p-10 text-center max-w-md w-full border">
-        <h1 className="text-6xl font-bold text-[#6d0f16]">404</h1>
-        <p className="text-xl font-semibold mt-4">Page Not Found</p>
-        <p className="text-gray-500 mt-2">
-          The page you are trying to access does not exist.
+      <div className="bg-white shadow-xl rounded-3xl p-10 text-center max-w-md w-full border border-gray-200">
+        <h1 className="text-6xl font-extrabold text-[#6d0f16]">404</h1>
+        <p className="text-xl font-bold text-gray-800 mt-4">Page Not Found</p>
+        <p className="text-gray-500 text-sm mt-2">
+          The page you are trying to access does not exist or has moved.
         </p>
         <button
           onClick={() => (window.location.href = "/signin")}
-          className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
+          className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white font-semibold px-6 py-3 rounded-2xl transition shadow-sm cursor-pointer"
         >
           Go Home
         </button>
@@ -74,12 +76,17 @@ const queryClient = new QueryClient({
   },
 });
 
+// Check if AllocationRoutes is an array of objects or single route element
+const parsedAllocationRoutes = Array.isArray(AllocationRoutes)
+  ? AllocationRoutes
+  : [AllocationRoutes];
+
 /* ================= ROUTES ================= */
 const router = createBrowserRouter([
   {
     path: "/",
     // Point the root to App.jsx so your auth and role redirection logic actually runs
-    element: <App />, 
+    element: <App />,
     errorElement: <ErrorPage />,
   },
   {
@@ -162,21 +169,25 @@ const router = createBrowserRouter([
       },
     ],
   },
-  ...createRoutesFromElements(<>{AllocationRoutes}</>),
+  ...parsedAllocationRoutes,
   {
     path: "/warden",
     element: <WardenAllocationPage />,
     errorElement: <ErrorPage />,
   },
-  // Added a temporary placeholder route for the Chief Warden
-  {
-    path: "/chief-warden",
-    element: <div>Chief Warden Dashboard - Coming Soon</div>,
-    errorElement: <ErrorPage />,
-  },
   {
     path: "/room-management",
     element: <RoomDashboardPage />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/chief-warden",
+    element: <ChiefWardenAllocationPage />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/wardenhostel",
+    element: <Warden />,
     errorElement: <ErrorPage />,
   },
   {
