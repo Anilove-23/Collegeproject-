@@ -6,6 +6,7 @@ export default function App() {
   const [loading, setLoading] = useState(true);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [role, setRole] = useState("");
+  const [authorityLevel, setAuthorityLevel] = useState(undefined);
 
   /* ================= AUTH CHECK ================= */
   useEffect(() => {
@@ -16,6 +17,12 @@ export default function App() {
       if (token && storedRole) {
         setIsLoggedIn(true);
         setRole(storedRole);
+
+        try {
+          setAuthorityLevel(JSON.parse(localStorage.getItem("user") || "{}")?.authority_level);
+        } catch {
+          setAuthorityLevel(undefined);
+        }
       }
     } catch (err) {
       console.log(err);
@@ -53,9 +60,12 @@ export default function App() {
     case "guard":
       return <Navigate to="/guard" replace />;
       
-    // Added new roles for Room Management Module
+    // Added new roles for Room Management Module.
+    // Same role string covers Warden/Chief Warden/Super Admin (see
+    // roomAccess.js authority_level scheme); only level 2 is "the Warden"
+    // and lands on their existing dashboard. Levels 1/3 use the Admin Panel.
     case "warden":
-      return <Navigate to="/warden" replace />;
+      return <Navigate to={authorityLevel === 2 ? "/warden" : "/admin"} replace />;
 
     case "chief_warden":
       return <Navigate to="/chief-warden" replace />;

@@ -34,7 +34,12 @@ import PendingPage from "./attendant/PendingPage";
 import ApprovedPage from "./attendant/ApprovedPage";
 import RejectedPage from "./attendant/RejectedPage";
 import ComplaintsPage from "./attendant/ComplaintsPage";
-import Admin from "./admin/admin";
+
+/* ================= ADMIN PANEL ================= */
+import AdminPanelLayout from "./admin/AdminLayout";
+import AdminHome from "./admin/AdminHome";
+import StudentSearchPage from "./admin/StudentSearchPage";
+import RequireRole from "./admin/RequireRole";
 
 /* ================= GUARD ================= */
 import GuardLayout from "./guard/GuardLayout";
@@ -116,8 +121,22 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <Admin />,
+    element: (
+      <RequireRole allowedRoles={["warden"]}>
+        <AdminPanelLayout />
+      </RequireRole>
+    ),
     errorElement: <ErrorPage />,
+    children: [
+      {
+        index: true,
+        element: <AdminHome />,
+      },
+      {
+        path: "students",
+        element: <StudentSearchPage />,
+      },
+    ],
   },
   {
     path: "/attendant",
@@ -177,7 +196,11 @@ const router = createBrowserRouter([
   },
   {
     path: "/room-management",
-    element: <RoomDashboardPage />,
+    element: (
+      <RequireRole allowedRoles={["warden"]}>
+        <RoomDashboardPage />
+      </RequireRole>
+    ),
     errorElement: <ErrorPage />,
   },
   {

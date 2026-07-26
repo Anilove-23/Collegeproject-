@@ -1,23 +1,10 @@
-// src/room_management/hooks/useRooms.js
 import { useQuery } from '@tanstack/react-query';
-import { mockRooms } from '../api/mockData';
+import { apiFetch } from '../../utils/api';
 
-// Fake API call that simulates network delay
-const fetchRooms = async (hostelId) => {
-  return new Promise((resolve) => {
-    setTimeout(() => {
-      // If a specific hostel is requested, filter it. Otherwise, return all.
-      const data = hostelId 
-        ? mockRooms.filter(room => room.hostelId === hostelId)
-        : mockRooms;
-      resolve(data);
-    }, 1000); // 1 second fake delay
-  });
-};
-
-export const useRooms = (hostelId = null) => {
+export const useRooms = (hostelId) => {
   return useQuery({
-    queryKey: ['rooms', hostelId], // Cache key
-    queryFn: () => fetchRooms(hostelId),
+    queryKey: ['rooms', hostelId],
+    queryFn: () => apiFetch(`/api/v1/hostels/${hostelId}/rooms`),
+    enabled: !!hostelId, // Sirf tabhi call karo jab hostelId available ho
   });
 };

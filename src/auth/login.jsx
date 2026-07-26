@@ -20,7 +20,8 @@ function Login() {
   /* ================= REDIRECT ================= */
 
   const getRedirectPath = (
-    role
+    role,
+    authorityLevel
   ) => {
 
     switch (role) {
@@ -30,6 +31,12 @@ function Login() {
 
       case "attendant":
         return "/attendant";
+
+      case "warden":
+        // Same role string covers Warden/Chief Warden/Super Admin (see
+        // roomAccess.js authority_level scheme); only level 2 is "the Warden"
+        // and lands on their existing dashboard. Levels 1/3 use the Admin Panel.
+        return authorityLevel === 2 ? "/warden" : "/admin";
 
       case "student":
       default:
@@ -86,8 +93,15 @@ function Login() {
       role
     ) {
 
+      let authorityLevel;
+      try {
+        authorityLevel = JSON.parse(localStorage.getItem("user") || "{}")?.authority_level;
+      } catch {
+        authorityLevel = undefined;
+      }
+
       navigate(
-        getRedirectPath(role)
+        getRedirectPath(role, authorityLevel)
       );
     }
 
@@ -158,7 +172,8 @@ function Login() {
 
         navigate(
           getRedirectPath(
-            formData.role
+            formData.role,
+            data.user?.authority_level
           )
         );
 

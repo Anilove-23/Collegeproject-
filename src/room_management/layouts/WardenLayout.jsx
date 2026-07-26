@@ -1,4 +1,5 @@
 import React from 'react';
+import { Toaster } from 'react-hot-toast';
 
 export default function WardenLayout({ children }) {
   const navItems = [
@@ -14,6 +15,9 @@ export default function WardenLayout({ children }) {
   return (
     <div className="flex h-screen bg-[#f8f9fa] overflow-hidden font-sans">
       
+      {/* Toast Notification Container added here */}
+      <Toaster position="top-right" reverseOrder={false} />
+
       <aside className="w-[260px] bg-white border-r border-gray-200 flex flex-col z-20 shrink-0">
         <div className="h-[60px] border-b border-gray-200 flex items-center px-6">
           <span className="text-[#6d0f16] font-black text-[13px] tracking-wider uppercase whitespace-nowrap">

@@ -73,10 +73,13 @@ export async function apiFetch(
 
   if (!response.ok) {
 
-    throw new Error(
+    const err = new Error(
       data.message ||
+      data.error ||
       "Request failed"
     );
+    err.data = data;
+    throw err;
   }
 
   return data;

@@ -1,50 +1,47 @@
-import { useQueryClient } from '@tanstack/react-query';
-import { mockRooms } from '../api/mockData';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { apiFetch } from '../../utils/api';
 
-export const useRoomMutations = () => {
+export const useRoomMutations = (hostelId) => {
   const queryClient = useQueryClient();
+  const invalidate = () => queryClient.invalidateQueries({ queryKey: ['rooms', hostelId] });
 
-  const handleAddRoom = (newRoomData) => {
-    const newRoom = {
-      id: `r${Math.random()}`,
-      roomNumber: newRoomData.roomNumber,
-      capacity: parseInt(newRoomData.capacity),
-      status: newRoomData.status,
-      hostelId: "Hostel A", 
-      residents: [],
-    };
-    mockRooms.push(newRoom);
-    queryClient.invalidateQueries(['rooms']);
+  const addRoomMutation = useMutation({
+    mutationFn: (newRoom) =>
+      apiFetch(`/api/v1/hostels/${hostelId}/rooms`, {
+        method: 'POST',
+        body: JSON.stringify(newRoom),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const updateRoomMutation = useMutation({
+    mutationFn: ({ roomId, updatedData }) =>
+      apiFetch(`/api/v1/hostels/${hostelId}/rooms/${roomId}`, {
+        method: 'PUT',
+        body: JSON.stringify(updatedData),
+      }),
+    onSuccess: invalidate,
+  });
+
+  const deleteRoomMutation = useMutation({
+    mutationFn: (roomId) =>
+      apiFetch(`/api/v1/hostels/${hostelId}/rooms/${roomId}`, { method: 'DELETE' }),
+    onSuccess: invalidate,
+  });
+
+  const bulkUploadMutation = useMutation({
+    mutationFn: (roomsArray) =>
+      apiFetch(`/api/v1/hostels/${hostelId}/rooms/bulk`, {
+        method: 'POST',
+        body: JSON.stringify({ rooms: roomsArray }),
+      }),
+    onSuccess: invalidate,
+  });
+
+  return {
+    handleAddRoom: (data) => addRoomMutation.mutateAsync(data),
+    handleUpdateRoom: (roomId, data) => updateRoomMutation.mutateAsync({ roomId, updatedData: data }),
+    handleDeleteRoom: (roomId) => deleteRoomMutation.mutateAsync(roomId),
+    handleBulkUpload: (rooms) => bulkUploadMutation.mutateAsync(rooms),
   };
-
-  const handleBulkUpload = (newRoomsArray) => {
-    const formattedNewRooms = newRoomsArray.map(room => ({
-      id: `r${Math.random()}`,
-      roomNumber: room.roomNumber,
-      capacity: room.capacity || 2,
-      status: room.status || 'STUDENT',
-      hostelId: "Hostel A",
-      residents: [],
-    }));
-    mockRooms.push(...formattedNewRooms);
-    queryClient.invalidateQueries(['rooms']);
-  };
-
-  const handleUpdateRoom = (updatedRoom) => {
-    const roomIndex = mockRooms.findIndex(r => r.id === updatedRoom.id);
-    if (roomIndex > -1) {
-      mockRooms[roomIndex] = updatedRoom;
-      queryClient.invalidateQueries(['rooms']);
-    }
-  };
-
-  const handleDeleteRoom = (roomId) => {
-    const roomIndex = mockRooms.findIndex(r => r.id === roomId);
-    if (roomIndex > -1) {
-      mockRooms.splice(roomIndex, 1);
-      queryClient.invalidateQueries(['rooms']);
-    }
-  };
-
-  return { handleAddRoom, handleBulkUpload, handleUpdateRoom, handleDeleteRoom };
 };

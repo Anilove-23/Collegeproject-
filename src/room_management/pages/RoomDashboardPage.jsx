@@ -1,30 +1,39 @@
-import React, { useState } from 'react';
-import { useRooms } from '../hooks/useRooms';
-import { useRoomMutations } from '../hooks/useRoomMutations';
-import { useResidents } from '../hooks/useResidents';
-import ManageRoomCard from '../components/room_grid/ManageRoomCard';
-import AddEditRoomModal from '../components/modals/AddEditRoomModal';
-import ManageResidentsModal from '../components/modals/ManageResidentsModal';
-import EditRoomModal from '../components/modals/EditRoomModal';
-import BulkUploadModal from '../components/modals/BulkUploadModal';
-import WardenLayout from '../layouts/WardenLayout'; 
-import AccessWrapper from '../components/shared/AccessWrapper';
+import React, { useState, useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { useHostels } from '../hooks/useHostels';
+import RoomManagementPanel from '../components/RoomManagementPanel';
+import WardenLayout from '../layouts/WardenLayout';
 
+// authority_level: 1 = view-only (any hostel), 2 = warden (own hostel only),
+// 3 = other admin (any hostel) — see backend roomAccess.js for the enforced side.
+function useCurrentAdmin() {
+  return useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem('user') || '{}');
+    } catch {
+      return {};
+    }
+  }, []);
+}
+
+// Standalone Room Management page — reached from the Admin Panel (Super
+// Admin / Chief Warden / view-only levels) and from Student Search's "View
+// Room" links. Level-2 Wardens use the Room Management tab embedded in
+// their own dashboard (WardenAllocationPage) instead of this route.
 export default function RoomDashboardPage() {
-  // 1. Fetching Data
-  const { data: rooms, isLoading, isError } = useRooms();
-  
-  // 2. Importing the Logic Hooks
-  const { handleAddRoom, handleBulkUpload, handleUpdateRoom, handleDeleteRoom } = useRoomMutations();
-  const { handleUpdateResidents } = useResidents();
-  
-  // 3. UI State (Modals)
-  const [isAddModalOpen, setIsAddModalOpen] = useState(false);
-  const [selectedRoomForResidents, setSelectedRoomForResidents] = useState(null);
-  const [selectedRoomForEdit, setSelectedRoomForEdit] = useState(null);
-  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
+  const admin = useCurrentAdmin();
+  const isScopedWarden = admin.authority_level === 2;
 
-  if (isLoading) {
+  const { data: hostels, isLoading: hostelsLoading } = useHostels();
+  const [searchParams] = useSearchParams();
+  const [pickedHostelId, setPickedHostelId] = useState(null);
+
+  const ownHostel = isScopedWarden ? hostels?.find((h) => h.name === admin.hostel) : null;
+  const hostelId = isScopedWarden
+    ? ownHostel?.id
+    : (pickedHostelId ?? searchParams.get('hostelId') ?? hostels?.[0]?.id);
+
+  if (hostelsLoading) {
     return (
       <WardenLayout>
         <div className="flex h-[60vh] items-center justify-center">
@@ -34,54 +43,34 @@ export default function RoomDashboardPage() {
     );
   }
 
-  if (isError) return <WardenLayout><div className="text-red-500 text-center mt-20 font-bold">Failed to load rooms.</div></WardenLayout>;
+  if (isScopedWarden && !ownHostel) {
+    return (
+      <WardenLayout>
+        <div className="text-red-500 text-center mt-20 font-bold">
+          Your account isn't assigned to a hostel yet. Contact a Super Admin.
+        </div>
+      </WardenLayout>
+    );
+  }
+
+  const currentHostelName = isScopedWarden ? admin.hostel : hostels?.find((h) => h.id === hostelId)?.name;
 
   return (
     <WardenLayout>
-      <div className="mb-8 flex justify-between items-end">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-900 leading-tight">Room Grid</h1>
-          <p className="text-[13px] text-gray-500 mt-1">Manage room statuses, capacity, and current allocations.</p>
+      {!isScopedWarden && hostels?.length > 0 && (
+        <div className="mb-4 flex justify-end">
+          <select
+            value={hostelId || ''}
+            onChange={(e) => setPickedHostelId(e.target.value)}
+            className="border border-gray-300 rounded-md px-3 py-2 text-[13px] font-semibold text-gray-700 focus:ring-1 focus:ring-[#6d0f16] focus:border-[#6d0f16] outline-none bg-white"
+          >
+            {hostels.map((h) => (
+              <option key={h.id} value={h.id}>{h.name}</option>
+            ))}
+          </select>
         </div>
-        
-        <AccessWrapper targetHostelId="Hostel A">
-          <div className="flex gap-3">
-            <button 
-              onClick={() => setIsBulkModalOpen(true)}
-              className="bg-white text-[#6d0f16] border border-[#6d0f16] px-5 py-2 rounded-md shadow-sm hover:bg-red-50 transition font-bold text-[13px] tracking-wide"
-            >
-              BULK UPLOAD CSV
-            </button>
-            <button 
-              onClick={() => setIsAddModalOpen(true)}
-              className="bg-[#6d0f16] text-white px-5 py-2 rounded-md shadow-sm hover:bg-[#530b11] transition font-bold text-[13px] tracking-wide border border-[#6d0f16]"
-            >
-              + ADD NEW ROOM
-            </button>
-          </div>
-        </AccessWrapper>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-        {rooms?.map((room) => (
-          <ManageRoomCard 
-            key={room.id} 
-            room={room} 
-            onManageClick={(clickedRoom) => setSelectedRoomForResidents(clickedRoom)}
-            onEditClick={(clickedRoom) => setSelectedRoomForEdit(clickedRoom)}
-          />
-        ))}
-      </div>
-
-      <AddEditRoomModal isOpen={isAddModalOpen} onClose={() => setIsAddModalOpen(false)} onSubmit={handleAddRoom} />
-      <ManageResidentsModal 
-        isOpen={!!selectedRoomForResidents} 
-        onClose={() => setSelectedRoomForResidents(null)} 
-        room={selectedRoomForResidents} 
-        onUpdateResidents={(roomId, residents) => handleUpdateResidents(roomId, residents, setSelectedRoomForResidents)} 
-      />
-      <EditRoomModal isOpen={!!selectedRoomForEdit} onClose={() => setSelectedRoomForEdit(null)} room={selectedRoomForEdit} onUpdate={handleUpdateRoom} onDelete={handleDeleteRoom} />
-      <BulkUploadModal isOpen={isBulkModalOpen} onClose={() => setIsBulkModalOpen(false)} onBulkSubmit={handleBulkUpload} />
+      )}
+      <RoomManagementPanel hostelId={hostelId} hostelName={currentHostelName} />
     </WardenLayout>
   );
 }
