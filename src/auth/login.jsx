@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -84,21 +83,6 @@ function Login() {
         e.target.value,
     });
   };
-
-  /* ================= CHECK AUTH ================= */
-
-  useEffect(() => {
-    try {
-      const token = localStorage.getItem("token");
-      const storedRole = localStorage.getItem("role");
-
-      if (token && storedRole) {
-        navigate(getRedirectPath(storedRole));
-      }
-    } catch (err) {
-      console.error(err);
-    }
-  }, [navigate]);
 
   /* ================= LOGIN ================= */
 
