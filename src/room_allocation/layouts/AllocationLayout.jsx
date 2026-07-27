@@ -183,10 +183,13 @@ export default function AllocationLayout({
             >
               LOCK SELECTION
             </button>
-            <button className="flex items-center gap-2 px-2.5 py-2 rounded text-[11px] font-semibold tracking-[0.06em] text-text-secondary hover:bg-canvas hover:text-text-primary transition-colors duration-150 border-0 bg-transparent cursor-pointer w-full">
-              <CogIcon /> SETTINGS
-            </button>
-            <button className="flex items-center gap-2 px-2.5 py-2 rounded text-[11px] font-semibold tracking-[0.06em] text-text-secondary hover:bg-canvas hover:text-text-primary transition-colors duration-150 border-0 bg-transparent cursor-pointer w-full">
+            <button 
+              onClick={() => {
+                localStorage.clear();
+                window.location.href = "/signin";
+              }}
+              className="flex items-center gap-2 px-2.5 py-2 rounded text-[11px] font-semibold tracking-[0.06em] text-text-secondary hover:bg-canvas hover:text-text-primary transition-colors duration-150 border-0 bg-transparent cursor-pointer w-full"
+            >
               <LogoutIcon /> LOGOUT
             </button>
           </div>
