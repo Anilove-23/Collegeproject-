@@ -4,9 +4,15 @@ import {
   createBrowserRouter,
   RouterProvider,
   Navigate,
-  createRoutesFromElements,
 } from "react-router-dom";
+import RoomDashboardPage from "./room_management/pages/RoomDashboardPage";
+
+/* ================= IMPORT TANSTACK QUERY ================= */
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
+
+/* ================= APP COMPONENT ================= */
+import App from "./App"; // We now import App to handle the initial Auth check
 
 import { AllocationRoutes } from "./room_allocation";
 import WardenAllocationPage from "./room_allocation/pages/WardenAllocationPage";
@@ -36,7 +42,12 @@ import PendingPage from "./attendant/PendingPage";
 import ApprovedPage from "./attendant/ApprovedPage";
 import RejectedPage from "./attendant/RejectedPage";
 import ComplaintsPage from "./attendant/ComplaintsPage";
-import Admin from "./admin/admin";
+
+/* ================= ADMIN PANEL ================= */
+import AdminPanelLayout from "./admin/AdminLayout";
+import AdminHome from "./admin/AdminHome";
+import StudentSearchPage from "./admin/StudentSearchPage";
+import RequireRole from "./admin/RequireRole";
 
 /* ================= GUARD ================= */
 import GuardLayout from "./guard/GuardLayout";
@@ -44,22 +55,22 @@ import Dashboard from "./guard/Dashboard";
 import ExitPage from "./guard/ExitPage";
 import ReturnPage from "./guard/ReturnPage";
 
-
 import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
 import Warden from "./warden/warden";
+
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
-      <div className="bg-white shadow-xl rounded-3xl p-10 text-center max-w-md w-full border">
-        <h1 className="text-6xl font-bold text-[#6d0f16]">404</h1>
-        <p className="text-xl font-semibold mt-4">Page Not Found</p>
-        <p className="text-gray-500 mt-2">
-          The page you are trying to access does not exist.
+      <div className="bg-white shadow-xl rounded-3xl p-10 text-center max-w-md w-full border border-gray-200">
+        <h1 className="text-6xl font-extrabold text-[#6d0f16]">404</h1>
+        <p className="text-xl font-bold text-gray-800 mt-4">Page Not Found</p>
+        <p className="text-gray-500 text-sm mt-2">
+          The page you are trying to access does not exist or has moved.
         </p>
         <button
           onClick={() => (window.location.href = "/signin")}
-          className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
+          className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white font-semibold px-6 py-3 rounded-2xl transition shadow-sm cursor-pointer"
         >
           Go Home
         </button>
@@ -68,11 +79,28 @@ function ErrorPage() {
   );
 }
 
+/* ================= INITIALIZE TANSTACK QUERY ================= */
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // Keep cache fresh for 5 minutes
+      refetchOnWindowFocus: false, // Do not refetch when switching browser tabs
+    },
+  },
+});
+
+// Check if AllocationRoutes is an array of objects or single route element
+const parsedAllocationRoutes = Array.isArray(AllocationRoutes)
+  ? AllocationRoutes
+  : [AllocationRoutes];
+
 /* ================= ROUTES ================= */
 const router = createBrowserRouter([
   {
     path: "/",
-    element: <Navigate to="/signin" />,
+    // Point the root to App.jsx so your auth and role redirection logic actually runs
+    element: <App />,
+    errorElement: <ErrorPage />,
   },
   {
     path: "/signin",
@@ -111,8 +139,22 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: <Admin />,
+    element: (
+      <RequireRole allowedRoles={["warden"]}>
+        <AdminPanelLayout />
+      </RequireRole>
+    ),
     errorElement: <ErrorPage />,
+    children: [
+      {
+        index: true,
+        element: <AdminHome />,
+      },
+      {
+        path: "students",
+        element: <StudentSearchPage />,
+      },
+    ],
   },
   {
     path: "/attendant",
@@ -164,7 +206,7 @@ const router = createBrowserRouter([
       },
     ],
   },
-  ...createRoutesFromElements(<>{AllocationRoutes}</>),
+  ...parsedAllocationRoutes,
   {
     path: "/warden",
     element: <WardenAllocationPage />,
@@ -176,6 +218,15 @@ const router = createBrowserRouter([
       { path: "room-grid", element: <WardenRoomGridTab /> },
       { path: "remaining", element: <WardenRemainingTab /> },
     ]
+  },
+  {
+    path: "/room-management",
+    element: (
+      <RequireRole allowedRoles={["warden"]}>
+        <RoomDashboardPage />
+      </RequireRole>
+    ),
+    errorElement: <ErrorPage />,
   },
   {
     path: "/chief-warden",
@@ -196,6 +247,9 @@ const router = createBrowserRouter([
 /* ================= RENDER ================= */
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    <RouterProvider router={router} />
+    {/* Wrap the RouterProvider with QueryClientProvider */}
+    <QueryClientProvider client={queryClient}>
+      <RouterProvider router={router} />
+    </QueryClientProvider>
   </StrictMode>
 );
