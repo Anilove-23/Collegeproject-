@@ -7,6 +7,16 @@ function OtpVerification() {
   const location = useLocation();
   const email = location.state?.email || "";
 
+  const inferRole = (role, emailValue) => {
+    const normalizedEmail = String(emailValue || "").toLowerCase();
+
+    if (normalizedEmail.includes("attendant")) return "attendant";
+    if (normalizedEmail.includes("chief")) return "chief-warden";
+    if (normalizedEmail.includes("warden")) return "warden";
+
+    return role || "student";
+  };
+
   const [otp, setOtp] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,24 +50,29 @@ function OtpVerification() {
       setLoading(true);
       setError("");
 
-      const data = await apiFetch("/auth/verify-otp", {
+      const data = await apiFetch("/api/auth/verify-otp", {
         method: "POST",
         body: JSON.stringify({ email, otp }),
       });
 
+      if (!data?.token) {
+        throw new Error(data?.message || "OTP verification failed");
+      }
+
       const role = data.role || "student";
+      const normalizedRole = inferRole(role, data.user?.email || email);
       localStorage.setItem("token", data.token);
-      localStorage.setItem("role", role);
+      localStorage.setItem("role", normalizedRole);
       localStorage.setItem(
         "user",
         JSON.stringify({
           ...data.user,
           token: data.token,
-          role,
+          role: normalizedRole,
         })
       );
 
-      navigate(getRedirectPath(role));
+      navigate(getRedirectPath(normalizedRole));
     } catch (err) {
       console.error(err);
       setError(err.message || "OTP verification failed");

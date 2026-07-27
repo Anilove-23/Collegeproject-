@@ -11,6 +11,10 @@ import {
 import {
   apiFetch,
 } from "../utils/api";
+import {
+  validateDepartmentRollNumber,
+  validateStudentEmail,
+} from "./departmentValidation";
 
 function Signup() {
 
@@ -185,7 +189,19 @@ function Signup() {
         }
       }
 
-      if (
+      if (isStudent) {
+        if (
+          !validateStudentEmail(
+            formData.email,
+            formData.rollno
+          )
+        ) {
+          setError(
+            "Email must be in the format rollno@nith.ac.in"
+          );
+          return;
+        }
+      } else if (
         !formData.email.endsWith(
           "@nith.ac.in"
         )
@@ -195,6 +211,21 @@ function Signup() {
           "Use your college email"
         );
 
+        return;
+      }
+
+      if (
+        isStudent &&
+        formData.department &&
+        formData.rollno &&
+        !validateDepartmentRollNumber(
+          formData.department,
+          formData.rollno
+        )
+      ) {
+        setError(
+          "Roll number does not match the selected department."
+        );
         return;
       }
 
@@ -427,6 +458,7 @@ payload = {
               Student
 
             </option>
+            </select>
 
             {/* <option value="attendant">
 
@@ -446,7 +478,6 @@ payload = {
             </option>
 
           </select>
-
           {/* ================= COMMON ================= */}
 
           <input
@@ -497,13 +528,7 @@ payload = {
 
                 <option value="CSE">
 
-                  Computer Science & Engineering
-
-                </option>
-
-                <option value="ECE">
-
-                  Electronics & Communication
+                  Computer Science Engineering
 
                 </option>
 
@@ -522,6 +547,48 @@ payload = {
                 <option value="EE">
 
                   Electrical Engineering
+
+                </option>
+
+                <option value="ECE">
+
+                  Electronics & Communication Engineering
+
+                </option>
+
+                <option value="MNC">
+
+                  Mathematics & Computing
+
+                </option>
+
+                <option value="ENGINEERING PHYSICS">
+
+                  Engineering Physics
+
+                </option>
+
+                <option value="MATERIAL SCIENCE">
+
+                  Material Science
+
+                </option>
+
+                <option value="ARCHITECTURE">
+
+                  Architecture
+
+                </option>
+
+                <option value="DUAL DEGREE CSE">
+
+                  Dual Degree CSE
+
+                </option>
+
+                <option value="DUAL DEGREE ELECTRONICS">
+
+                  Dual Degree Electronics
 
                 </option>
 

@@ -17,6 +17,18 @@ function Login() {
   const navigate =
     useNavigate();
 
+  const inferRole = (role, emailValue) => {
+    const normalizedEmail = String(emailValue || "").toLowerCase();
+
+    if (normalizedEmail.includes("attendant")) return "attendant";
+    if (normalizedEmail.includes("chief")) return "chief-warden";
+    if (normalizedEmail.includes("warden")) return "warden";
+    if (normalizedEmail.includes("guard")) return "guard";
+    if (normalizedEmail.includes("gate")) return "guard";
+
+    return role || "student";
+  };
+
   /* ================= REDIRECT ================= */
 
  const getRedirectPath = (role) => {
@@ -75,29 +87,18 @@ function Login() {
 
   /* ================= CHECK AUTH ================= */
 
-  // useEffect(() => {
+  useEffect(() => {
+    try {
+      const token = localStorage.getItem("token");
+      const storedRole = localStorage.getItem("role");
 
-  //   const token =
-  //     localStorage.getItem(
-  //       "token"
-  //     );
-
-  //   const role =
-  //     localStorage.getItem(
-  //       "role"
-  //     );
-
-  //   if (
-  //     token &&
-  //     role
-  //   ) {
-
-  //     navigate(
-  //       getRedirectPath(role)
-  //     );
-  //   }
-
-  // }, [navigate]);
+      if (token && storedRole) {
+        navigate(getRedirectPath(storedRole));
+      }
+    } catch (err) {
+      console.error(err);
+    }
+  }, [navigate]);
 
   /* ================= LOGIN ================= */
 
@@ -126,7 +127,7 @@ function Login() {
         setError("");
 
         const data =
-          await apiFetch(
+          (await apiFetch(
             "/api/auth/login",
             {
               method: "POST",
@@ -139,32 +140,40 @@ function Login() {
                 password:
                   formData.password,
 
-                // role:
-                //   formData.role,
+                role: inferRole(
+                  "student",
+                  formData.email
+                ),
               }),
             }
-          );
+          )) || {};
 
-if (data.success && data.message === "OTP generated") {
+if (data?.success && data?.message === "OTP generated") {
   navigate("/verify-otp", { state: { email: formData.email } });
   return;
 }
 
-const role = data.role || "student";
+const role = data?.role || "student";
+const normalizedRole = inferRole(role, formData.email);
 
-localStorage.setItem("token", data.token);
-localStorage.setItem("role", role);
+if (data?.token) {
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("role", normalizedRole);
 
-localStorage.setItem(
-  "user",
-  JSON.stringify({
-    ...data.user,
-    token: data.token,
-    role: role,
-  })
-);
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      ...data.user,
+      token: data.token,
+      role: normalizedRole,
+    })
+  );
 
-navigate(getRedirectPath(role));
+  navigate(getRedirectPath(normalizedRole));
+  return;
+}
+
+setError(data?.message || "Login failed");
 
       } catch (err) {
 
