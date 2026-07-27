@@ -16,10 +16,18 @@ import App from "./App"; // We now import App to handle the initial Auth check
 
 import { AllocationRoutes } from "./room_allocation";
 import WardenAllocationPage from "./room_allocation/pages/WardenAllocationPage";
+import WardenOverviewTab from "./room_allocation/pages/WardenOverviewTab";
+import WardenLayoutTab from "./room_allocation/pages/WardenLayoutTab";
+import WardenRoomGridTab from "./room_allocation/pages/WardenRoomGridTab";
+import WardenRemainingTab from "./room_allocation/pages/WardenRemainingTab";
 
 /* ================= AUTH ================= */
 import Login from "./auth/login";
 import Signup from "./auth/signup";
+
+/* ================= FACE RECOGNITION ================= */
+import EnrollFace from "./face_recognition/EnrollFace";
+import VerifyFace from "./face_recognition/VerifyFace";
 
 /* ================= STUDENT ================= */
 import OutpassLayout from "./student/outpasses";
@@ -102,6 +110,16 @@ const router = createBrowserRouter([
   {
     path: "/signup",
     element: <Signup />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/face/enroll",
+    element: <EnrollFace />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/face/verify",
+    element: <VerifyFace />,
     errorElement: <ErrorPage />,
   },
   {
@@ -193,6 +211,13 @@ const router = createBrowserRouter([
     path: "/warden",
     element: <WardenAllocationPage />,
     errorElement: <ErrorPage />,
+    children: [
+      { index: true, element: <Navigate to="overview" replace /> },
+      { path: "overview", element: <WardenOverviewTab /> },
+      { path: "layout-builder", element: <WardenLayoutTab /> },
+      { path: "room-grid", element: <WardenRoomGridTab /> },
+      { path: "remaining", element: <WardenRemainingTab /> },
+    ]
   },
   {
     path: "/room-management",

@@ -5,6 +5,8 @@ import CreateOutpass from "./CreateOutpasses";
 import CancelOutpass from "./Canceloutpass";
 import { apiFetch } from "../utils/api";
 
+const IS_DEV = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
 export default function OutpassLayout() {
   const navigate = useNavigate();
 
@@ -14,6 +16,9 @@ export default function OutpassLayout() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [filter, setFilter] = useState("All");
+
+  /* ================= ALLOCATION EVENT STATE ================= */
+  const [allocationEvent, setAllocationEvent] = useState(null); // null = loading, false = none found
 
   /* ================= PAGINATION STATE ================= */
   const [page, setPage] = useState(1);
@@ -43,8 +48,33 @@ export default function OutpassLayout() {
     }
   }
 
+  /* ================= FETCH ALLOCATION EVENT ================= */
+  async function fetchAllocationEvent() {
+    try {
+      const userStr = localStorage.getItem('user');
+      const user = userStr ? JSON.parse(userStr) : null;
+      const studentYear = user?.current_year ?? user?.joining_year ?? null;
+      if (!studentYear) { setAllocationEvent(false); return; }
+
+      const res = await fetch(`http://localhost:5000/api/admin/events`, {
+        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` }
+      });
+      if (!res.ok) { setAllocationEvent(false); return; }
+      const data = await res.json();
+      const events = data.events ?? data ?? [];
+      // Find event for this student's year
+      const match = Array.isArray(events)
+        ? events.find(e => e.target_year === studentYear)
+        : null;
+      setAllocationEvent(match ?? false);
+    } catch {
+      setAllocationEvent(false);
+    }
+  }
+
   useEffect(() => {
     fetchOutpasses();
+    fetchAllocationEvent();
   }, []);
 
   /* ================= FILTER & PAGINATE ================= */
@@ -161,6 +191,48 @@ export default function OutpassLayout() {
                 </div>
               </div>
             </div>
+
+            {/* ROOM ALLOCATION BANNER */}
+            {(IS_DEV || allocationEvent) && (
+              <div
+                onClick={() => (IS_DEV || allocationEvent) && navigate('/allocation')}
+                className={`flex items-center justify-between rounded-2xl border px-6 py-4 shadow-sm transition-all duration-200 ${
+                  IS_DEV || allocationEvent
+                    ? 'bg-gradient-to-r from-[#6d0f16]/10 to-[#8b0f18]/5 border-[#6d0f16]/30 cursor-pointer hover:shadow-md hover:from-[#6d0f16]/20 hover:to-[#8b0f18]/10'
+                    : 'bg-gray-50 border-gray-200 cursor-not-allowed opacity-60'
+                }`}
+              >
+                <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-lg shadow-sm ${
+                    IS_DEV || allocationEvent ? 'bg-[#6d0f16] text-white' : 'bg-gray-300 text-gray-500'
+                  }`}>
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white">
+                      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+                      <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <p className={`text-sm font-bold ${
+                      IS_DEV || allocationEvent ? 'text-[#6d0f16]' : 'text-gray-400'
+                    }`}>
+                      Room Allocation Dashboard
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {IS_DEV && !allocationEvent
+                        ? '⚙️ Dev mode — no event found for your year yet'
+                        : allocationEvent
+                        ? `🗓 Allocation for Year ${allocationEvent.target_year} is scheduled`
+                        : 'Room allocation has not been scheduled for your year yet'}
+                    </p>
+                  </div>
+                </div>
+                {(IS_DEV || allocationEvent) && (
+                  <span className="text-[#6d0f16] font-bold text-sm flex items-center gap-1">
+                    Open →
+                  </span>
+                )}
+              </div>
+            )}
 
             {/* METRIC CARDS */}
             <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5">

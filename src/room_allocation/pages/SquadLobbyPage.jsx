@@ -1,11 +1,18 @@
 import { useState, useEffect } from 'react';
 import AllocationLayout from '../layouts/AllocationLayout';
-import { useAllocationState } from '../hooks/useAllocationState';
-import { 
-  createSquad, leaveSquad, getGroupMembersWithCgpa, getPendingRequests, 
-  getAllGroups, searchStudents, sendInvite, acceptInvite, rejectInvite,
-  addBotToSquad, kickMember
+import { useActiveBatch } from '../hooks/useActiveBatch';
+import { useGroupMembers } from '../hooks/useGroupMembers';
+import { useCreateGroup } from '../mutations/useCreateGroup';
+import { useLeaveGroup } from '../mutations/useLeaveGroup';
+import { useAcceptInvite } from '../mutations/useAcceptInvite';
+import { queryClient } from '../lib/queryClient.js';
+import { groupKeys, batchKeys } from '../hooks/queryKeys.js';
+import {
+  getGroupMembersWithCgpa, getPendingRequests,
+  getAllGroups, searchStudents, sendInvite, rejectInvite,
+  addBotToSquad, kickMember,
 } from '../api/squad.api';
+import { useQuery } from '@tanstack/react-query';
 import LoadingScreen from '../components/shared/LoadingScreen';
 
 /* ══════════════════════════════════════════════════════════════
@@ -358,7 +365,6 @@ function YourStanding({ state, members }) {
     const leader = members.find(m => m.is_leader) || members[0];
     cgpa = leader.cgpa ? parseFloat(leader.cgpa).toFixed(2) : '—';
   } else {
-    // If solo, show the user's own CGPA from the allocation state
     cgpa = state.cgpa ? parseFloat(state.cgpa).toFixed(2) : '—';
   }
 
@@ -384,102 +390,132 @@ function YourStanding({ state, members }) {
 }
 
 /* ══════════════════════════════════════════════════════════════
-   PAGE 
+   PAGE
 ══════════════════════════════════════════════════════════════ */
 export default function SquadLobbyPage() {
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const studentId = user ? user.id : null;
 
-  const { state, loading: stateLoading, refresh: refreshState } = useAllocationState(studentId);
-  const [members, setMembers] = useState([]);
-  const [publicSquads, setPublicSquads] = useState([]);
-  const [pendingRequests, setPendingRequests] = useState([]);
-  const [refreshHash, setRefreshHash] = useState(0);
+  // ── TanStack Query: allocation state (replaces useAllocationState + manual loading) ──
+  const { data: state, isLoading: stateLoading } = useActiveBatch(studentId);
 
-  const refreshData = () => {
-    if (refreshState) refreshState();
-    setRefreshHash(h => h + 1);
-  };
+  // ── TanStack Query: group members with CGPA (replaces useEffect + getGroupMembersWithCgpa) ──
+  const { data: membersData } = useQuery({
+    queryKey: groupKeys.members(state?.groupId),
+    queryFn:  () => getGroupMembersWithCgpa(state.groupId),
+    enabled:  !!state?.groupId,
+    staleTime: 30_000,
+    select:   (res) => res.members ?? [],
+  });
+  const members = membersData ?? [];
 
-  useEffect(() => {
-    if (!state) return;
-    
-    if (state.hasSquad && state.groupId) {
-      getGroupMembersWithCgpa(state.groupId)
-        .then(res => setMembers(res.members || []))
-        .catch(console.error);
-    } else {
-      setMembers([]);
-    }
+  // ── TanStack Query: public groups (replaces useEffect + getAllGroups) ──
+  const { data: publicSquadsData } = useQuery({
+    queryKey: [...groupKeys.all, 'public'],
+    queryFn:  () => getAllGroups(),
+    enabled:  !state?.hasSquad,
+    staleTime: 30_000,
+    select:   (res) => (res.groups ?? []).filter(g => g.status === 'FORMING'),
+  });
+  const publicSquads = publicSquadsData ?? [];
 
-    // Fetch public squads if solo
-    if (!state.hasSquad) {
-      getAllGroups()
-        .then(res => setPublicSquads((res.groups || []).filter(g => g.status === 'FORMING')))
-        .catch(console.error);
-    }
+  // ── TanStack Query: pending requests (replaces useEffect + getPendingRequests) ──
+  const { data: pendingRequestsData } = useQuery({
+    queryKey: groupKeys.requests,
+    queryFn:  () => getPendingRequests(),
+    enabled:  !!studentId,
+    staleTime: 30_000,
+    select:   (res) => res.requests ?? [],
+  });
+  const pendingRequests = pendingRequestsData ?? [];
 
-    // Fetch pending requests
-    getPendingRequests()
-      .then(res => setPendingRequests(res.requests || []))
-      .catch(console.error);
-
-  }, [state, refreshHash]);
+  // ── Mutations ──────────────────────────────────────────────
+  const createGroupMutation = useCreateGroup(studentId);
+  const leaveGroupMutation  = useLeaveGroup({ studentId, groupId: state?.groupId });
+  const acceptInviteMutation = useAcceptInvite({ studentId, groupId: state?.groupId });
 
   if (stateLoading || !state) return <LoadingScreen label="Loading Lobby..." />;
 
+  // ── Handlers ──────────────────────────────────────────────
   const handleCreate = () => {
-    createSquad(studentId).then(refreshData).then(() => window.location.reload()).catch(err => alert(err.message || 'Error'));
+    createGroupMutation.mutate(undefined, {
+      onSuccess: () => window.location.reload(),
+      onError: (err) => alert(err.message || 'Error'),
+    });
   };
 
   const handleLeave = () => {
     if (confirm('Are you sure you want to leave this squad?')) {
-      leaveSquad(studentId).then(refreshData).then(() => window.location.reload()).catch(err => alert(err.message || 'Error'));
+      leaveGroupMutation.mutate(undefined, {
+        onSuccess: () => window.location.reload(),
+        onError: (err) => alert(err.message || 'Error'),
+      });
     }
   };
 
   const handleAccept = (reqId) => {
-    acceptInvite(reqId).then(refreshData).catch(err => alert(err.message || 'Error'));
+    acceptInviteMutation.mutate(reqId, {
+      onSuccess: () => {
+        // Also refresh requests list
+        queryClient.invalidateQueries({ queryKey: groupKeys.requests });
+      },
+      onError: (err) => alert(err.message || 'Error'),
+    });
   };
 
   const handleReject = (reqId) => {
-    rejectInvite(reqId).then(refreshData).catch(err => alert(err.message || 'Error'));
+    rejectInvite(reqId)
+      .then(() => queryClient.invalidateQueries({ queryKey: groupKeys.requests }))
+      .catch(err => alert(err.message || 'Error'));
   };
 
   const handleSearchInvite = (inviteStudentId) => {
     sendInvite({ groupId: state.groupId, studentId: inviteStudentId, requestType: 'INVITE_FROM_PRIMARY' })
-      .then(() => { alert('Invite sent'); refreshData(); })
+      .then(() => {
+        alert('Invite sent');
+        queryClient.invalidateQueries({ queryKey: groupKeys.requests });
+      })
       .catch(err => alert(err.message || 'Error'));
   };
 
   const handleKickMember = (memberId) => {
     if (confirm('Are you sure you want to kick this member?')) {
-      kickMember(state.groupId, studentId, memberId).then(refreshData).catch(err => alert(err.message || 'Error'));
+      kickMember(state.groupId, studentId, memberId)
+        .then(() => {
+          queryClient.invalidateQueries({ queryKey: groupKeys.members(state.groupId) });
+          queryClient.invalidateQueries({ queryKey: batchKeys.current(studentId) });
+        })
+        .catch(err => alert(err.message || 'Error'));
     }
   };
   window.handleKickMember = handleKickMember;
 
   const handleAddBot = () => {
-    addBotToSquad(state.groupId).then(refreshData).catch(err => alert(err.message || 'Error'));
+    addBotToSquad(state.groupId)
+      .then(() => queryClient.invalidateQueries({ queryKey: groupKeys.members(state.groupId) }))
+      .catch(err => alert(err.message || 'Error'));
   };
   window.handleAddBot = handleAddBot;
 
   const handleApplyToSquad = (groupId, leaderName) => {
     if (confirm(`Send join request to ${leaderName ? leaderName + "'s" : 'this'} squad?`)) {
       sendInvite({ groupId, studentId, requestType: 'APPLICATION_FROM_STUDENT' })
-        .then(() => { alert('Join request sent!'); refreshData(); })
+        .then(() => {
+          alert('Join request sent!');
+          queryClient.invalidateQueries({ queryKey: groupKeys.requests });
+        })
         .catch(err => alert(err.message || 'Error sending request'));
     }
   };
 
   return (
     <AllocationLayout phase="Selection Phase" batch={state.batchNumber ? `Batch ${state.batchNumber}` : "Batch TBD"} hostelId={state.hostelId}>
-      <div className="flex flex-col gap-5 h-full">
+      <div className="flex flex-col gap-5 h-[calc(100vh-120px)]">
 
         <PhaseBanner state={state} />
 
-        <div className="grid grid-cols-[280px_1fr_260px] gap-5 items-start h-full">
+        <div className="grid grid-cols-[280px_1fr_260px] gap-5 flex-1 min-h-0">
           {/* LEFT */}
           <SquadPanel 
             state={state} 
@@ -490,8 +526,7 @@ export default function SquadLobbyPage() {
           />
 
           {/* CENTER */}
-          <div className="flex flex-col gap-5 h-full">
-            <InviteInbox pendingRequests={pendingRequests} onAccept={handleAccept} onReject={handleReject} />
+          <div className="flex flex-col gap-5 min-h-0 h-full">
             <CenterBottomPanel state={state} publicSquads={publicSquads} pendingRequests={pendingRequests} onApplyToSquad={handleApplyToSquad} />
           </div>
 

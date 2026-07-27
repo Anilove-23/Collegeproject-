@@ -1,12 +1,17 @@
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import AllocationLayout from '../layouts/AllocationLayout';
-import { useAllocationState } from '../hooks/useAllocationState';
+import { useActiveBatch } from '../hooks/useActiveBatch';
 
 export default function ShatteredPage() {
   const navigate = useNavigate();
+  const location = useLocation();
   const userStr  = localStorage.getItem('user');
   const user     = userStr ? JSON.parse(userStr) : null;
-  const { state } = useAllocationState(user?.id ?? null);
+  const { data: state } = useActiveBatch(user?.id ?? null);
+
+  // Reason injected by the socket redirect (most specific) or a default
+  const shatterReason = location.state?.reason
+    ?? 'Your squad size exceeded the capacity of all remaining available rooms.';
 
   return (
     <AllocationLayout phase="Squad Shattered" batch="Re-enter as Solo">
@@ -37,9 +42,10 @@ export default function ShatteredPage() {
           </div>
           <div className="px-5 py-4 flex flex-col gap-3">
             <p className="text-[13px] text-text-secondary leading-relaxed">
-              The <strong className="text-text-primary">Shatter Protocol</strong> was triggered for your squad.
-              This typically occurs when a squad cannot be allocated as a unit — for example, if no room
-              with sufficient capacity exists to accommodate the full group.
+              The <strong className="text-text-primary">Shatter Protocol</strong> was triggered for your squad:
+            </p>
+            <p className="text-[13px] text-amber-700 font-semibold bg-amber-50 border border-amber-200 rounded px-3 py-2 leading-relaxed">
+              {shatterReason}
             </p>
             <p className="text-[13px] text-text-secondary leading-relaxed">
               Your squad members have each been returned to the solo pool with their original

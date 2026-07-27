@@ -1,4 +1,6 @@
-import { Route } from 'react-router-dom';
+import { Route, Outlet } from 'react-router-dom';
+import { QueryClientProvider } from '@tanstack/react-query';
+import { queryClient } from '../lib/queryClient.js';
 import AllocationGatewayPage  from '../pages/AllocationGatewayPage';
 import SquadLobbyPage         from '../pages/SquadLobbyPage';
 import WaitingRoomPage        from '../pages/WaitingRoomPage';
@@ -16,27 +18,35 @@ import ErrorBoundary          from '../components/shared/ErrorBoundary';
 /**
  * AllocationRoutes — renders all room_allocation module routes.
  * Usage: embed inside a parent <Routes> in main.jsx.
- *
- *   <Routes>
- *     <Route path="/" element={<App />} />
- *     {AllocationRoutes}
- *   </Routes>
  */
 
+function AllocationRoot() {
+  return (
+    <QueryClientProvider client={queryClient}>
+      <Outlet />
+    </QueryClientProvider>
+  );
+}
+
 const AllocationRoutes = [
-  <Route key="gw"      path="/allocation"                  element={<AllocationGatewayPage />}         errorElement={<ErrorBoundary />} />,
-  <Route key="squad"   path="/allocation/squad"            element={<SquadLobbyPage hasGroup={true}  />} errorElement={<ErrorBoundary />} />,
-  <Route key="solo"    path="/allocation/squad-solo"       element={<SquadLobbyPage hasGroup={false} />} errorElement={<ErrorBoundary />} />,
-  <Route key="wait"    path="/allocation/waiting-room"     element={<WaitingRoomPage />}               errorElement={<ErrorBoundary />} />,
-  <Route key="live"    path="/allocation/selection/live"   element={<LiveSelectionPage />}             errorElement={<ErrorBoundary />} />,
-  <Route key="locked"  path="/allocation/selection/locked" element={<SelectionLockedPage />}           errorElement={<ErrorBoundary />} />,
-  <Route key="results" path="/allocation/results"          element={<AllocationResultsPage />}         errorElement={<ErrorBoundary />} />,
-  <Route key="penalty"    path="/allocation/penalty"          element={<PenaltyPage />}                   errorElement={<ErrorBoundary />} />,
-  <Route key="shattered"  path="/allocation/shattered"        element={<ShatteredPage />}                 errorElement={<ErrorBoundary />} />,
-  <Route key="history" path="/allocation/history"          element={<AllocationHistoryPage />}         errorElement={<ErrorBoundary />} />,
-  <Route key="grid"    path="/allocation/room-grid"        element={<RoomGridPage />}                  errorElement={<ErrorBoundary />} />,
-  <Route key="pref"    path="/allocation/preferences"      element={<PreferencesPage />}               errorElement={<ErrorBoundary />} />,
-  <Route key="admin"   path="/allocation/admin"            element={<AllocationAdminPage />}           errorElement={<ErrorBoundary />} />,
+  {
+    element: <AllocationRoot />,
+    children: [
+      { path: "/allocation", element: <AllocationGatewayPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/squad", element: <SquadLobbyPage hasGroup={true} />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/squad-solo", element: <SquadLobbyPage hasGroup={false} />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/waiting-room", element: <WaitingRoomPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/selection/live", element: <LiveSelectionPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/selection/locked", element: <SelectionLockedPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/results", element: <AllocationResultsPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/penalty", element: <PenaltyPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/shattered", element: <ShatteredPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/history", element: <AllocationHistoryPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/room-grid", element: <RoomGridPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/preferences", element: <PreferencesPage />, errorElement: <ErrorBoundary /> },
+      { path: "/allocation/admin", element: <AllocationAdminPage />, errorElement: <ErrorBoundary /> },
+    ]
+  }
 ];
 
 export default AllocationRoutes;
