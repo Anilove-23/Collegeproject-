@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAllocationState } from '../hooks/useAllocationState';
+import { useActiveBatch } from '../hooks/useActiveBatch';
 import LoadingScreen from '../components/shared/LoadingScreen';
 import ErrorState from '../components/shared/ErrorState';
 import { ROUTES } from '../constants/routes';
@@ -28,7 +28,7 @@ export default function AllocationGatewayPage() {
   const user = userStr ? JSON.parse(userStr) : null;
   const studentId = user ? user.id : null;
 
-  const { state, loading, error } = useAllocationState(studentId);
+  const { data: state, isLoading: loading, error } = useActiveBatch(studentId);
 
   useEffect(() => {
     if (!loading && !error && state) {
@@ -40,11 +40,8 @@ export default function AllocationGatewayPage() {
       const target = resolveRoute(state);
       if (!target) return;
 
-      // Brief animation then redirect
-      setTargetRoute(target);
-      setRedirecting(true);
-      const t = setTimeout(() => navigate(target, { replace: true }), 1500);
-      return () => clearTimeout(t);
+      // Redirect instantly instead of forcing an artificial delay
+      navigate(target, { replace: true });
     }
   }, [state, loading, error, navigate]);
 
@@ -81,34 +78,6 @@ export default function AllocationGatewayPage() {
         allocationDate={state.allocationDate}
         lobbyOpensAt={state.lobbyOpensAt}
       />
-    );
-  }
-
-  // Redirecting animation
-  if (redirecting && targetRoute) {
-    return (
-      <AllocationLayout>
-        <div className="max-w-xl mx-auto pt-20 flex flex-col items-center gap-6">
-          <div className="flex gap-2">
-            {[0, 1, 2].map((i) => (
-              <div
-                key={i}
-                className="w-2.5 h-2.5 rounded-full bg-crimson animate-bounce"
-                style={{ animationDelay: `${i * 0.15}s` }}
-              />
-            ))}
-          </div>
-          <div className="text-center">
-            <p className="text-[11px] font-bold tracking-[0.1em] text-crimson">ALLOCATION GATEWAY</p>
-            <h1 className="text-[20px] font-black text-text-primary tracking-tight mt-1">
-              Routing you to the right page…
-            </h1>
-            <p className="text-[13px] text-text-secondary mt-1">
-              Taking you to <strong>{targetRoute}</strong>
-            </p>
-          </div>
-        </div>
-      </AllocationLayout>
     );
   }
 

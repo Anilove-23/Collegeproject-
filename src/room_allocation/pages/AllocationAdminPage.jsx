@@ -1,166 +1,238 @@
+/**
+ * AllocationAdminPage.jsx
+ *
+ * Admin control panel for the room allocation cycle (Year-Based Architecture):
+ *   • Event orchestrator (Select Target Year -> Create/Manage Event)
+ *   • Room pool configurator (multi-hostel, per-room selection for the event)
+ *   • Rank / CGPA upload panel
+ *   • Events status table
+ */
 import { useEffect, useMemo, useState } from 'react';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { queryClient } from '../lib/queryClient.js';
+import { adminKeys } from '../hooks/queryKeys.js';
+import { getEvents, createEvent, updateEventDate } from '../api/admin.api.js';
 import AllocationLayout from '../layouts/AllocationLayout';
+import RankUpdatePanel from '../components/admin/RankUpdatePanel';
+import RoomPoolConfigurator from '../components/admin/RoomPoolConfigurator';
 
-const API_BASE = 'http://localhost:5000/api/admin';
+const TARGET_YEARS = [1, 2, 3, 4, 5];
 
 export default function AllocationAdminPage() {
-  const [hostels, setHostels] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [selectedHostelId, setSelectedHostelId] = useState('');
-  const [allocationDate, setAllocationDate] = useState('');
-  const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+    const [selectedTargetYear, setSelectedTargetYear] = useState(2); // Default to 2nd Year
+    const [allocationDateInput, setAllocationDateInput] = useState('');
+    const [poolSavedMsg, setPoolSavedMsg] = useState('');
+    const [dateSavedMsg, setDateSavedMsg] = useState('');
 
-  const selectedHostel = useMemo(
-    () => hostels.find((h) => String(h.id) === String(selectedHostelId)) ?? null,
-    [hostels, selectedHostelId]
-  );
+    // Fetch all events
+    const {
+        data: events = [],
+        isLoading: isLoadingEvents,
+        error: eventsError,
+    } = useQuery({
+        queryKey: adminKeys.events(),
+        queryFn: getEvents,
+        staleTime: 30_000,
+    });
 
-  const loadHostels = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await fetch(`${API_BASE}/hostels`);
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message ?? 'Failed to fetch hostels');
-      }
+    // Find the event for the currently selected target year
+    const currentEvent = useMemo(
+        () => events.find(e => e.target_year === selectedTargetYear) ?? null,
+        [events, selectedTargetYear]
+    );
 
-      setHostels(data.hostels ?? []);
-      if (!selectedHostelId && data.hostels?.length) {
-        setSelectedHostelId(data.hostels[0].id);
-        setAllocationDate(data.hostels[0].allocation_date?.slice(0, 10) ?? '');
-      }
-    } catch (err) {
-      setError(err.message ?? 'Failed to load hostels');
-    } finally {
-      setLoading(false);
-    }
-  };
+    // Sync local date input with the current event
+    useEffect(() => {
+        if (currentEvent?.allocation_date) {
+            setAllocationDateInput(String(currentEvent.allocation_date).slice(0, 10));
+        } else {
+            setAllocationDateInput('');
+        }
+        setPoolSavedMsg('');
+        setDateSavedMsg('');
+    }, [currentEvent]);
 
-  useEffect(() => {
-    loadHostels();
-  }, []);
+    // Create Event Mutation
+    const { mutate: doCreateEvent, isPending: isCreating } = useMutation({
+        mutationFn: createEvent,
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminKeys.events() });
+            setDateSavedMsg('Event created successfully.');
+        }
+    });
 
-  useEffect(() => {
-    if (selectedHostel?.allocation_date) {
-      setAllocationDate(String(selectedHostel.allocation_date).slice(0, 10));
-    } else {
-      setAllocationDate('');
-    }
-  }, [selectedHostel?.id]);
+    // Update Date Mutation
+    const { mutate: doUpdateDate, isPending: isUpdating } = useMutation({
+        mutationFn: ({ eventId, date }) => updateEventDate(eventId, { allocationDate: date }),
+        onSuccess: () => {
+            queryClient.invalidateQueries({ queryKey: adminKeys.events() });
+            setDateSavedMsg('Allocation date updated successfully.');
+        }
+    });
 
-  const handleSetDate = async (e) => {
-    e.preventDefault();
-    if (!selectedHostelId || !allocationDate) return;
+    const handleCreateOrUpdate = () => {
+        if (!allocationDateInput) return;
+        if (currentEvent) {
+            doUpdateDate({ eventId: currentEvent.id, date: allocationDateInput });
+        } else {
+            doCreateEvent({ targetYear: selectedTargetYear, allocationDate: allocationDateInput });
+        }
+    };
 
-    setSaving(true);
-    setMessage('');
-    setError('');
+    const handlePoolSaved = (result) => {
+        setPoolSavedMsg(`✅ Pool saved — ${result.poolSize} rooms assigned to Year ${selectedTargetYear}`);
+        queryClient.invalidateQueries({ queryKey: adminKeys.events() });
+    };
 
-    try {
-      const res = await fetch(`${API_BASE}/set-allocation-date`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ hostelId: selectedHostelId, allocationDate }),
-      });
+    return (
+        <AllocationLayout phase="Admin" batch="Allocation Control">
+            <div className="max-w-5xl mx-auto flex flex-col gap-5 pt-4">
 
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data.message ?? 'Failed to set allocation date');
-      }
+                {/* Header */}
+                <div className="bg-card border border-border rounded-xl shadow-sm p-5">
+                    <h1 className="text-[20px] font-black text-text-primary tracking-tight">
+                        Allocation Admin
+                    </h1>
+                    <p className="text-[12px] text-text-muted mt-1">
+                        Configure the room pool, set the allocation date, and orchestrate year-based allocation events.
+                    </p>
+                </div>
 
-      setMessage(`Allocation date updated for ${data.hostel?.name ?? 'hostel'}.`);
-      await loadHostels();
-    } catch (err) {
-      setError(err.message ?? 'Failed to set allocation date');
-    } finally {
-      setSaving(false);
-    }
-  };
+                {/* Event + date + pool configurator */}
+                <div className="bg-card border border-border rounded-xl shadow-sm p-5">
+                    <h2 className="text-[13px] font-bold text-text-secondary tracking-[0.05em] mb-4">
+                        ALLOCATION SCHEDULE (YEAR-BASED)
+                    </h2>
 
-  return (
-    <AllocationLayout phase="Admin" batch="Allocation Control">
-      <div className="max-w-5xl mx-auto flex flex-col gap-5 pt-4">
-        <div className="bg-card border border-border rounded-xl shadow-sm p-5">
-          <h1 className="text-[20px] font-black text-text-primary tracking-tight">Allocation Admin</h1>
-          <p className="text-[12px] text-text-muted mt-1">Public page: view hostels and set allocation date without authentication.</p>
-        </div>
+                    <div className="flex flex-col md:flex-row items-end gap-4 mb-4">
+                        <label className="flex-1 text-[12px] font-semibold text-text-secondary">
+                            Target Year
+                            <select
+                                className="mt-1 w-full border border-border rounded px-3 py-2 bg-canvas text-text-primary"
+                                value={selectedTargetYear}
+                                onChange={(e) => setSelectedTargetYear(Number(e.target.value))}
+                                disabled={isLoadingEvents}
+                            >
+                                {TARGET_YEARS.map(year => (
+                                    <option key={year} value={year}>Year {year}</option>
+                                ))}
+                            </select>
+                        </label>
 
-        <div className="bg-card border border-border rounded-xl shadow-sm p-5">
-          <form className="flex flex-col md:flex-row md:items-end gap-4" onSubmit={handleSetDate}>
-            <label className="flex-1 text-[12px] font-semibold text-text-secondary">
-              Hostel
-              <select
-                className="mt-1 w-full border border-border rounded px-3 py-2 bg-canvas text-text-primary"
-                value={selectedHostelId}
-                onChange={(e) => setSelectedHostelId(e.target.value)}
-                disabled={loading || saving}
-              >
-                {hostels.map((h) => (
-                  <option key={h.id} value={h.id}>
-                    {h.name}
-                  </option>
-                ))}
-              </select>
-            </label>
+                        <label className="flex-1 text-[12px] font-semibold text-text-secondary">
+                            Allocation Date
+                            <input
+                                type="date"
+                                className="mt-1 block w-full border border-border rounded px-3 py-2 bg-canvas text-text-primary"
+                                value={allocationDateInput}
+                                onChange={(e) => {
+                                    setAllocationDateInput(e.target.value);
+                                    setDateSavedMsg('');
+                                }}
+                                disabled={isLoadingEvents}
+                            />
+                        </label>
 
-            <label className="text-[12px] font-semibold text-text-secondary">
-              Allocation Date (Saturday)
-              <input
-                type="date"
-                className="mt-1 border border-border rounded px-3 py-2 bg-canvas text-text-primary"
-                value={allocationDate}
-                onChange={(e) => setAllocationDate(e.target.value)}
-                disabled={loading || saving}
-                required
-              />
-            </label>
+                        <button
+                            onClick={handleCreateOrUpdate}
+                            disabled={!allocationDateInput || isCreating || isUpdating}
+                            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded font-bold text-[12px] disabled:opacity-50"
+                        >
+                            {currentEvent ? 'UPDATE DATE' : 'CREATE EVENT'}
+                        </button>
+                    </div>
 
-            <button
-              type="submit"
-              disabled={saving || !selectedHostelId || !allocationDate}
-              className="px-4 py-2 rounded bg-crimson text-white text-[12px] font-bold tracking-[0.06em] disabled:opacity-50"
-            >
-              {saving ? 'SAVING...' : 'SET DATE'}
-            </button>
-          </form>
+                    {dateSavedMsg && (
+                        <p className="text-[12px] font-semibold text-emerald-700 mb-3">{dateSavedMsg}</p>
+                    )}
+                    {eventsError && (
+                        <p className="text-[12px] font-semibold text-crimson mb-3">{eventsError.message}</p>
+                    )}
 
-          {message && <p className="mt-3 text-[12px] font-semibold text-emerald-700">{message}</p>}
-          {error && <p className="mt-3 text-[12px] font-semibold text-crimson">{error}</p>}
-        </div>
+                    {/* Room Pool Configurator */}
+                    <div className="border-t border-border pt-4 mt-4">
+                        <p className="text-[12px] font-bold text-text-secondary tracking-[0.05em] mb-3">
+                            ROOM POOL
+                            <span className="ml-2 font-normal text-text-muted normal-case tracking-normal">
+                                Select specific rooms from any hostel to contribute to this year's allocation
+                            </span>
+                        </p>
 
-        <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
-          <div className="px-4 py-3 border-b border-border text-[12px] font-bold tracking-[0.06em] text-text-secondary">HOSTELS</div>
-          {loading ? (
-            <div className="p-4 text-[12px] text-text-muted">Loading hostels...</div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-[12px]">
-                <thead className="bg-canvas text-text-secondary">
-                  <tr>
-                    <th className="text-left px-4 py-2">Name</th>
-                    <th className="text-left px-4 py-2">Phase</th>
-                    <th className="text-left px-4 py-2">Allocation Date</th>
-                    <th className="text-left px-4 py-2">Lobby Opens At</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {hostels.map((h) => (
-                    <tr key={h.id} className="border-t border-border">
-                      <td className="px-4 py-2 text-text-primary font-semibold">{h.name}</td>
-                      <td className="px-4 py-2 text-text-secondary">{h.current_phase}</td>
-                      <td className="px-4 py-2 text-text-secondary">{h.allocation_date ? String(h.allocation_date).slice(0, 10) : '-'}</td>
-                      <td className="px-4 py-2 text-text-secondary">{h.lobby_opens_at ? new Date(h.lobby_opens_at).toLocaleString() : '-'}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+                        {currentEvent ? (
+                            <RoomPoolConfigurator
+                                eventId={currentEvent.id}
+                                onSaved={handlePoolSaved}
+                            />
+                        ) : (
+                            <p className="text-[12px] text-text-muted italic bg-canvas p-3 rounded border border-border border-dashed">
+                                You must create an Allocation Event for Year {selectedTargetYear} before configuring the room pool.
+                            </p>
+                        )}
+                        {poolSavedMsg && (
+                            <p className="text-[12px] font-semibold text-emerald-700 mt-3">{poolSavedMsg}</p>
+                        )}
+                    </div>
+                </div>
+
+                {/* Rank + CGPA upload */}
+                <RankUpdatePanel />
+
+                {/* Events status table */}
+                <div className="bg-card border border-border rounded-xl shadow-sm overflow-hidden">
+                    <div className="px-4 py-3 border-b border-border text-[12px] font-bold tracking-[0.06em] text-text-secondary">
+                        ACTIVE EVENTS
+                    </div>
+
+                    {isLoadingEvents ? (
+                        <div className="p-4 text-[12px] text-text-muted animate-pulse">
+                            Loading events...
+                        </div>
+                    ) : events.length === 0 ? (
+                        <div className="p-4 text-[12px] text-text-muted">
+                            No allocation events created yet.
+                        </div>
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <table className="w-full text-[12px]">
+                                <thead className="bg-canvas text-text-secondary">
+                                    <tr>
+                                        <th className="text-left px-4 py-2">Target Year</th>
+                                        <th className="text-left px-4 py-2">Status (Phase)</th>
+                                        <th className="text-left px-4 py-2">Allocation Date</th>
+                                        <th className="text-left px-4 py-2">Lobby Opens At</th>
+                                        <th className="text-left px-4 py-2">Paused?</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {events.map(ev => (
+                                        <tr key={ev.id} className="border-t border-border">
+                                            <td className="px-4 py-2 text-text-primary font-bold">
+                                                Year {ev.target_year}
+                                            </td>
+                                            <td className="px-4 py-2 text-text-secondary">
+                                                {ev.status}
+                                            </td>
+                                            <td className="px-4 py-2 text-text-secondary">
+                                                {ev.allocation_date ? String(ev.allocation_date).slice(0, 10) : '—'}
+                                            </td>
+                                            <td className="px-4 py-2 text-text-secondary">
+                                                {ev.lobby_opens_at ? new Date(ev.lobby_opens_at).toLocaleString() : '—'}
+                                            </td>
+                                            <td className="px-4 py-2">
+                                                {ev.is_paused ? (
+                                                    <span className="text-crimson font-bold">Yes</span>
+                                                ) : (
+                                                    <span className="text-emerald-600 font-bold">No</span>
+                                                )}
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
             </div>
-          )}
-        </div>
-      </div>
-    </AllocationLayout>
-  );
+        </AllocationLayout>
+    );
 }

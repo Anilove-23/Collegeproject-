@@ -1,13 +1,13 @@
 import AllocationLayout from '../layouts/AllocationLayout';
 import PreferenceBuilder from '../components/live_selection/PreferenceBuilder';
-import { useAllocationState } from '../hooks/useAllocationState';
+import { useActiveBatch } from '../hooks/useActiveBatch';
 
 export default function PreferencesPage() {
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const studentId = user ? user.id : null;
 
-  const { state: allocationState } = useAllocationState(studentId);
+  const { data: allocationState } = useActiveBatch(studentId);
 
   return (
     <AllocationLayout phase="Selection Phase" batch="Preferences">

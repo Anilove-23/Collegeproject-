@@ -17,11 +17,15 @@ function normaliseStatus(raw) {
   return {
     // Phase
     phase,
+    eventId:             r.event_id ?? null,
     hostelId:            r.hostel_id ?? null,
     hostelName:          r.hostel_name ?? null,
     isPaused:            r.is_paused ?? false,
     allocationDate:      r.allocation_date ?? null,
     lobbyOpensAt:        r.lobby_opens_at ?? null,
+    // Target hostel — the hostel whose rooms this student sees and is allocated into
+    targetHostelId:      r.target_hostel_id ?? null,
+    targetHostelName:    r.target_hostel_name ?? null,
 
     // Squad / group state
     hasSquad:            !!r.group_id,

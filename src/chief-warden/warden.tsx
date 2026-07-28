@@ -1,0 +1,281 @@
+import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
+
+// 1. Define the TypeScript Interface
+interface OutpassData {
+  id: number;
+  student_id: number;
+  student_name: string;
+  student_room: string;
+  student_phone: string;
+  department: string;
+  reason: string;
+  outpass_type: string;
+  destination: string;
+  date_from: string;
+  date_to: string;
+  hostel: string;
+  room: string;
+  status: string;
+  is_exited: boolean;
+  is_entered: boolean;
+  exit_time?: string;
+  enter_time?: string;
+  date_created: string;
+}
+
+function Warden() {
+  const navigate = useNavigate();
+  const userString = localStorage.getItem('user');
+  const wardenUser = userString ? JSON.parse(userString) : { name: "Warden", role: "warden" };
+
+  // State
+  const [outpasses, setOutpasses] = useState<OutpassData[]>([]);
+  const [loading, setLoading] = useState<boolean>(true);
+  
+  // Filtering State
+  const [selectedHostel, setSelectedHostel] = useState<string>('All');
+  const [searchQuery, setSearchQuery] = useState<string>('');
+  const [selectedStatus, setSelectedStatus] = useState<string>('All');
+
+  // --- Fetch All Outpasses WITHOUT TOKEN ---
+  useEffect(() => {
+    const fetchOutpasses = async () => {
+      try {
+        // No headers needed since we removed 'auth' from the backend
+        const response = await fetch('http://localhost:5000/outpass/monitor');
+        
+        if (!response.ok) throw new Error('Failed to fetch outpasses');
+        
+        const data = await response.json();
+        setOutpasses(data.outpasses);
+      } catch (error) {
+        console.error("Error fetching outpasses:", error);
+        alert("Failed to load monitor data. Is your backend running?");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    // Call it immediately, skipping the token check
+    fetchOutpasses();
+  }, []);
+
+  // --- Helper to determine exact real-time status ---
+  const getDisplayStatus = (pass: OutpassData) => {
+    if (pass.is_entered) return { label: 'Completed', color: 'bg-gray-100 text-gray-700 border-gray-300' };
+    if (pass.is_exited) return { label: 'Out of Campus', color: 'bg-orange-100 text-orange-800 border-orange-300' };
+    if (pass.status === 'approved') return { label: 'Approved (Inside)', color: 'bg-blue-100 text-blue-800 border-blue-300' };
+    if (pass.status === 'pending') return { label: 'Pending Approval', color: 'bg-yellow-100 text-yellow-800 border-yellow-300' };
+    return { label: pass.status, color: 'bg-red-100 text-red-800 border-red-300' }; 
+  };
+
+  // --- Filtering Logic ---
+  const filteredOutpasses = outpasses.filter(pass => {
+    const matchesHostel = selectedHostel === 'All' || pass.hostel === selectedHostel;
+    
+    const studentName = pass.student_name || "";
+    const studentRoom = pass.student_room || "";
+    const studentPhone = pass.student_phone || "";
+
+    const matchesSearch = 
+      studentName.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      studentRoom.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      studentPhone.includes(searchQuery);
+
+    let matchesStatus = true;
+    if (selectedStatus === 'Active') {
+      matchesStatus = pass.status === 'approved' && !pass.is_entered; 
+    } else if (selectedStatus === 'Pending') {
+      matchesStatus = pass.status === 'pending';
+    } else if (selectedStatus === 'Completed') {
+      matchesStatus = pass.is_entered === true;
+    }
+      
+    return matchesHostel && matchesSearch && matchesStatus; 
+  });
+
+   
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+    navigate("/");
+  };
+  if (loading) {
+    return <div className="min-h-screen bg-[#f5f5f5] flex items-center justify-center font-bold text-[#5b0e0e]">Loading Dashboard...</div>;
+  }
+
+  return (
+    <div className="min-h-screen bg-[#f5f5f5] flex flex-col">
+      
+      
+      {/* 1. Primary Maroon Navbar */}
+      <nav className="w-full bg-[#5b0e0e] text-white shadow-md px-6 py-4 flex justify-between items-center z-10 sticky top-0">
+                <div className="flex items-center gap-3 justify-center ">
+  <img
+    src="l.png"
+    alt="nithlogo"
+    width={60}
+    height={60}
+    className="object-contain"
+  />
+
+  <h1 className="text-2xl font-bold">
+   warden
+  </h1>
+</div>
+        <div className="flex items-center space-x-4">
+          <div className="flex flex-col text-right">
+            <span className="text-sm font-bold leading-tight">{wardenUser.name}</span>
+            <span className="text-xs text-gray-300">Hostel Warden</span>
+          </div>
+          <div className="w-10 h-10 bg-[#741616] rounded-full flex items-center justify-center font-bold border-2 border-[#8a1a1a] shadow-sm uppercase">
+            {wardenUser.name ? wardenUser.name.charAt(0) : 'W'}
+          </div>
+           <button
+            onClick={handleLogout}
+            className="bg-white text-[#5b0e0e] hover:bg-gray-100 px-5 py-2 rounded-md font-semibold shadow-sm transition-colors duration-200"
+          >
+            Logout
+          </button>
+        </div>
+      </nav>
+
+      {/* 2. Advanced Search and Filter Controls */}
+      <div className="w-full bg-white shadow-sm border-b border-gray-200 sticky top-[72px] z-0">
+        <div className="max-w-6xl mx-auto px-4 py-5 grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+          
+          <div className="w-full">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Filter by Hostel</label>
+            <select 
+              value={selectedHostel}
+              onChange={(e) => setSelectedHostel(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded-md outline-none focus:border-[#5b0e0e] focus:ring-1 focus:ring-[#5b0e0e] bg-gray-50 text-gray-800 font-medium"
+            >
+              <option value="All">All Hostels</option>
+              <option value="Hostel A">Hostel A</option>
+              <option value="Hostel B">Hostel B</option>
+            </select>
+          </div>
+
+          <div className="w-full">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Filter by Status</label>
+            <select 
+              value={selectedStatus}
+              onChange={(e) => setSelectedStatus(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded-md outline-none focus:border-[#5b0e0e] focus:ring-1 focus:ring-[#5b0e0e] bg-gray-50 text-gray-800 font-medium"
+            >
+              <option value="All">All History</option>
+              <option value="Pending">Pending Approval</option>
+              <option value="Active">Currently Active (Approved / Out)</option>
+              <option value="Completed">Completed / Returned</option>
+            </select>
+          </div>
+
+          <div className="w-full">
+            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1">Search Database</label>
+            <input 
+              type="text" 
+              placeholder="Search Name, Roll No, or Phone..." 
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full border border-gray-300 p-3 rounded-md outline-none focus:border-[#5b0e0e] focus:ring-1 focus:ring-[#5b0e0e] bg-gray-50 text-gray-800"
+            />
+          </div>
+
+        </div>
+      </div>
+
+      {/* 3. Main Content Area */}
+      <div className="flex-1 w-full max-w-6xl mx-auto py-8 px-4 flex flex-col space-y-4">
+        
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 flex justify-between items-center mb-2">
+          <span className="text-sm font-bold text-gray-500 uppercase">Showing {filteredOutpasses.length} Records</span>
+        </div>
+
+        {filteredOutpasses.length > 0 ? (
+          filteredOutpasses.map((pass) => {
+            const displayStatus = getDisplayStatus(pass);
+            
+            // Safely parse dates to prevent React crashing
+            const dateFrom = pass.date_from ? new Date(pass.date_from).toLocaleDateString() : 'N/A';
+            const dateTo = pass.date_to ? new Date(pass.date_to).toLocaleDateString() : 'N/A';
+            const dateCreated = pass.date_created ? new Date(pass.date_created).toLocaleString() : 'N/A';
+
+            return (
+              <div key={pass.id} className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 flex flex-col md:flex-row justify-between items-start gap-6 hover:shadow-md transition-shadow">
+                
+                {/* Left Block */}
+                <div className="md:w-1/3 border-b md:border-b-0 md:border-r border-gray-100 pb-4 md:pb-0 pr-0 md:pr-6">
+                  <div className="flex items-center gap-2 mb-2">
+                    <h3 className="text-xl font-bold text-[#5b0e0e]">{pass.student_name}</h3>
+                  </div>
+                  
+                  <div className="space-y-1 text-sm text-gray-600">
+                    <p><span className="font-bold text-gray-800">Roll No:</span> {pass.student_room}</p>
+                    <p><span className="font-bold text-gray-800">Hostel:</span> {pass.hostel}</p>
+                    <p><span className="font-bold text-gray-800">Dept:</span> {pass.department}</p>
+                    <p><span className="font-bold text-gray-800">Phone:</span> {pass.student_phone}</p>
+                  </div>
+                </div>
+
+                {/* Middle Block */}
+                <div className="md:w-1/3 flex-1">
+                  <div className="flex gap-2 items-center mb-2">
+                    <span className="text-xs px-2 py-1 bg-gray-100 text-gray-600 rounded font-bold border border-gray-200 uppercase">
+                      {pass.outpass_type}
+                    </span>
+                    <span className={`text-xs px-2 py-1 rounded font-bold uppercase border ${displayStatus.color}`}>
+                      {displayStatus.label}
+                    </span>
+                  </div>
+
+                  <p className="text-gray-800 font-medium mb-1">
+                    <span className="text-gray-500 text-xs uppercase tracking-wider block">Destination</span> 
+                    {pass.destination}
+                  </p>
+                  
+                  <p className="text-gray-600 text-sm mt-2 italic border-l-2 border-gray-200 pl-2">
+                    "{pass.reason}"
+                  </p>
+                </div>
+
+                {/* Right Block */}
+                <div className="md:w-1/3 w-full bg-gray-50 p-4 rounded-lg border border-gray-100 text-sm">
+                  <div className="grid grid-cols-2 gap-2 mb-3 pb-3 border-b border-gray-200">
+                    <div>
+                      <span className="block text-[10px] uppercase font-bold text-gray-400">Date From</span>
+                      <span className="font-semibold text-gray-700">{dateFrom}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[10px] uppercase font-bold text-gray-400">Date To</span>
+                      <span className="font-semibold text-gray-700">{dateTo}</span>
+                    </div>
+                  </div>
+                  
+                  <div className="space-y-1 text-xs text-gray-500">
+                    <p>Applied: <span className="font-medium text-gray-800">{dateCreated}</span></p>
+                    {pass.exit_time && <p>Exited: <span className="font-medium text-orange-600">{new Date(pass.exit_time).toLocaleString()}</span></p>}
+                    {pass.enter_time && <p>Entered: <span className="font-medium text-emerald-600">{new Date(pass.enter_time).toLocaleString()}</span></p>}
+                  </div>
+                </div>
+
+              </div>
+            );
+          })
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-16 text-center">
+            <div className="text-5xl mb-4">📭</div>
+            <h3 className="text-xl font-semibold text-gray-700 mb-2">No records found</h3>
+            <p className="text-gray-500">
+              Try adjusting your filters or search query.
+            </p>
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+}
+
+export default Warden;
