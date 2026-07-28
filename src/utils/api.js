@@ -1,6 +1,5 @@
 const BASE_URL =
-  import.meta.env.VITE_API_URL ||
-  "http://localhost:8000";
+  (import.meta.env.VITE_API_URL || "http://localhost:5000").replace(/\/$/, "");
 
 export async function apiFetch(
   endpoint,
@@ -40,17 +39,15 @@ export async function apiFetch(
 
   if (
     response.status === 401 ||
-    // response.status === 400 ||
-
     response.status === 403
   ) {
-
     localStorage.clear();
-
     window.location.href =
       "/signin";
 
-    return;
+    throw new Error(
+      "Unauthorized"
+    );
   }
 
   const text =
