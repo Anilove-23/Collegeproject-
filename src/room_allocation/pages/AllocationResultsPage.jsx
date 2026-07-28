@@ -1,32 +1,32 @@
-import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import AllocationLayout from '../layouts/AllocationLayout';
 import AllocationResultCard from '../components/results/AllocationResultCard';
 import RoommateList from '../components/results/RoommateList';
 import LoadingScreen from '../components/shared/LoadingScreen';
 import { getFinalAllocation, downloadAllotmentLetter } from '../api/results.api';
-import { useAllocationState } from '../hooks/useAllocationState';
+import { useActiveBatch } from '../hooks/useActiveBatch';
+import { batchKeys } from '../hooks/queryKeys';
 
 export default function AllocationResultsPage() {
   const navigate = useNavigate();
-  const [result, setResult] = useState(null);
-  const [loading, setLoading] = useState(true);
   
   const userStr = localStorage.getItem('user');
   const user = userStr ? JSON.parse(userStr) : null;
   const studentId = user ? user.id : null;
 
-  const { state: allocationState, loading: stateLoading } = useAllocationState(studentId);
+  // ── TanStack Query: allocation state (replaces useAllocationState) ──
+  const { data: allocationState, isLoading: stateLoading } = useActiveBatch(studentId);
 
-  useEffect(() => {
-    if (studentId) {
-      getFinalAllocation(studentId).then(setResult).finally(() => setLoading(false));
-    } else {
-      setLoading(false);
-    }
-  }, [studentId]);
+  // ── TanStack Query: final allocation result (replaces useEffect + getFinalAllocation) ──
+  const { data: result, isLoading: resultLoading } = useQuery({
+    queryKey: batchKeys.result(studentId),
+    queryFn:  () => getFinalAllocation(studentId),
+    enabled:  !!studentId,
+    staleTime: 60_000,
+  });
 
-  if (loading || stateLoading) return <LoadingScreen label="Fetching your allocation result…" />;
+  if (stateLoading || resultLoading) return <LoadingScreen label="Fetching your allocation result…" />;
 
   /* ── STATE C: Waiting for results (No result yet) ── */
   if (!result || !result.room) {

@@ -1,93 +1,52 @@
-import {
-  useEffect,
-  useState,
-} from "react";
-
-import {
-  Navigate,
-} from "react-router-dom";
-
-import Login from "./auth/Login";
+import { useEffect, useState } from "react";
+import { Navigate } from "react-router-dom";
+import Login from "./auth/login";
 
 export default function App() {
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [isLoggedIn, setIsLoggedIn] =
-    useState(false);
-
-  const [role, setRole] =
-    useState("");
+  const [loading, setLoading] = useState(true);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const [role, setRole] = useState("");
+  const [authorityLevel, setAuthorityLevel] = useState(undefined);
 
   /* ================= AUTH CHECK ================= */
-
   useEffect(() => {
-
     try {
+      const token = localStorage.getItem("token");
+      const storedRole = localStorage.getItem("role");
 
-      const token =
-        localStorage.getItem("token");
-
-      const storedRole =
-        localStorage.getItem("role");
-
-      if (
-        token &&
-        storedRole
-      ) {
-
+      if (token && storedRole) {
         setIsLoggedIn(true);
-
         setRole(storedRole);
+
+        try {
+          setAuthorityLevel(JSON.parse(localStorage.getItem("user") || "{}")?.authority_level);
+        } catch {
+          setAuthorityLevel(undefined);
+        }
       }
-
     } catch (err) {
-
       console.log(err);
     }
-
     setLoading(false);
-
   }, []);
 
   /* ================= LOADING ================= */
-
   if (loading) {
-
     return (
-
       <div className="min-h-screen flex items-center justify-center bg-gray-100">
-
         <div className="text-center">
-
           <div className="w-14 h-14 border-4 border-[#6d0f16] border-t-transparent rounded-full animate-spin mx-auto"></div>
-
           <p className="mt-5 text-gray-600 font-medium">
-
             Loading Application...
-
           </p>
-
         </div>
-
       </div>
     );
   }
 
   /* ================= LOGIN ================= */
-
   if (!isLoggedIn) {
-
-    return (
-
-      <Login
-        setIsLoggedIn={
-          setIsLoggedIn
-        }
-        setRole={setRole}
-      />
-    );
+    return <Login setIsLoggedIn={setIsLoggedIn} setRole={setRole} />;
   }
 
   /* ================= ROLE REDIRECTS ================= */

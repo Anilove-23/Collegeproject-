@@ -1,8 +1,26 @@
-import { useBatchCountdown } from '../../hooks/useBatchCountdown';
+import { useState, useEffect } from 'react';
+import { secondsToCountdown } from '../../utils/timers';
 
 /** Sticky top timer bar for the live selection page */
-export default function LiveRoundTimer({ round = 1, initialSeconds = 1112, isLeader = true }) {
-  const { display, isExpired } = useBatchCountdown(initialSeconds);
+export default function LiveRoundTimer({ round = 1, targetDate = null, isLeader = true }) {
+  const [secs, setSecs] = useState(0);
+
+  useEffect(() => {
+    if (!targetDate) {
+      setSecs(0);
+      return;
+    }
+    const update = () => {
+      const remaining = Math.max(0, Math.floor((new Date(targetDate).getTime() - Date.now()) / 1000));
+      setSecs(remaining);
+    };
+    update();
+    const t = setInterval(update, 1000);
+    return () => clearInterval(t);
+  }, [targetDate]);
+
+  const display = secondsToCountdown(secs);
+  const isExpired = secs === 0;
 
   return (
     <div className={`flex items-center justify-between px-6 py-3 border-b border-border ${isExpired ? 'bg-red-600' : 'bg-text-primary'} text-white`}>

@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import AllocationLayout from '../layouts/AllocationLayout';
-import { useAllocationState } from '../hooks/useAllocationState';
+import { useActiveBatch } from '../hooks/useActiveBatch';
+import { useRoundState } from '../hooks/useRoundState';
 import { getBatches } from '../api/allocation.api';
 import LoadingScreen from '../components/shared/LoadingScreen';
 
@@ -177,19 +179,24 @@ export default function WaitingRoomPage() {
   const user = userStr ? JSON.parse(userStr) : null;
   const studentId = user ? user.id : null;
 
-  const { state, loading } = useAllocationState(studentId);
-  const [batches, setBatches] = useState([]);
+  const { data: state, isLoading: loading } = useActiveBatch(studentId);
 
-  useEffect(() => {
-    if (state?.hostelId) {
-      getBatches(state.hostelId).then(res => {
-        if (res.batches) setBatches(res.batches);
-        else if (res.result) setBatches(res.result);
-      }).catch(console.error);
-    }
-  }, [state]);
+  // Use TanStack Query for batches instead of useEffect
+  const { data: batchesData } = useQuery({
+    queryKey: ['batches', state?.hostelId],
+    queryFn: () => getBatches(state.hostelId),
+    enabled: !!state?.hostelId,
+    staleTime: 30_000,
+    select: (res) => res.batches || res.result || [],
+  });
+  
+  const batches = batchesData || [];
 
-  const countdown = useCountdown(state?.batchStartTime ?? null);
+  const countdown   = useCountdown(state?.batchStartTime ?? null);
+  const roundState  = useRoundState(state);          // socket-first, DB fallback
+  const roundTimer  = useCountdown(roundState?.roundEndsAt ?? null);
+  const totalRounds = 6; // fixed 6 rounds per batch
+  const currentRound = roundState?.roundNumber ?? null;
 
   if (loading || !state) return <LoadingScreen label="Checking Waiting Room..." />;
 
@@ -209,23 +216,74 @@ export default function WaitingRoomPage() {
         {/* Countdown card — only during SOFT_LOCK / LIVE_BATCHES */}
         {(state.phase === 'SOFT_LOCK' || state.phase === 'LIVE_BATCHES') && (
           <div className="bg-card border border-border rounded shadow-sm px-8 py-7 flex flex-col items-center text-center">
-            <p className="text-[11px] font-bold tracking-[0.1em] text-text-muted mb-2">
-              {state.batchActive
-                ? 'YOUR BATCH IS ACTIVE — SUBMIT PREFERENCES'
-                : state.batchNumber
-                ? `TIME UNTIL BATCH #${state.batchNumber} BEGINS`
-                : 'WAITING FOR BATCH SCHEDULE'}
-            </p>
-            <p className="text-[52px] font-black tracking-[-0.02em] text-crimson leading-none tabular-nums mb-1">
-              {state.batchActive ? 'LIVE' : countdown}
-            </p>
-            {state.batchActive && (
-              <button
-                onClick={() => navigate('/allocation/squad')}
-                className="mt-4 flex items-center gap-2 px-6 py-2.5 bg-crimson text-white text-[11px] font-bold tracking-[0.1em] rounded border-0 cursor-pointer hover:opacity-90 transition-opacity"
-              >
-                GO TO PREFERENCES <ArrowRight />
-              </button>
+            {state.batchActive ? (
+              /* ── Batch is LIVE: show round info + round countdown ── */
+              <>
+                {/* Round indicator pills */}
+                <div className="flex items-center gap-2 mb-5">
+                  {Array.from({ length: totalRounds }, (_, i) => i + 1).map(r => {
+                    const isDone    = r < (currentRound ?? 1);
+                    const isCurrent = r === (currentRound ?? 1);
+                    return (
+                      <div
+                        key={r}
+                        className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-black border transition-all ${
+                          isCurrent
+                            ? 'bg-crimson text-white border-crimson scale-110 shadow-md'
+                            : isDone
+                            ? 'bg-canvas border-border text-text-muted line-through opacity-50'
+                            : 'bg-canvas border-border text-text-muted opacity-30'
+                        }`}
+                      >
+                        {r}
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Active round label */}
+                <p className="text-[11px] font-bold tracking-[0.1em] text-text-muted mb-1">
+                  ROUND {currentRound ?? '—'} OF {totalRounds} — TIME REMAINING
+                </p>
+
+                {/* Round countdown */}
+                <p className="text-[52px] font-black tracking-[-0.02em] text-crimson leading-none tabular-nums mb-1">
+                  {roundTimer}
+                </p>
+
+                {roundState?.source === 'derived' && (
+                  <p className="text-[10px] text-text-muted opacity-60 mb-1">approx. — waiting for server sync</p>
+                )}
+
+                {/* Batch-level end time */}
+                {state.batchEndTime && (
+                  <p className="text-[11px] text-text-muted mt-1">
+                    Batch ends at{' '}
+                    <span className="font-bold text-text-secondary">
+                      {new Date(state.batchEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </p>
+                )}
+
+                <button
+                  onClick={() => navigate('/allocation/preferences')}
+                  className="mt-5 flex items-center gap-2 px-6 py-2.5 bg-crimson text-white text-[11px] font-bold tracking-[0.1em] rounded border-0 cursor-pointer hover:opacity-90 transition-opacity"
+                >
+                  GO TO PREFERENCES <ArrowRight />
+                </button>
+              </>
+            ) : (
+              /* ── Batch not yet live: show batch start countdown ── */
+              <>
+                <p className="text-[11px] font-bold tracking-[0.1em] text-text-muted mb-2">
+                  {state.batchNumber
+                    ? `TIME UNTIL BATCH #${state.batchNumber} BEGINS`
+                    : 'WAITING FOR BATCH SCHEDULE'}
+                </p>
+                <p className="text-[52px] font-black tracking-[-0.02em] text-crimson leading-none tabular-nums mb-1">
+                  {countdown}
+                </p>
+              </>
             )}
           </div>
         )}
