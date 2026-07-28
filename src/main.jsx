@@ -5,21 +5,10 @@ import {
   RouterProvider,
   Navigate,
 } from "react-router-dom";
-import RoomDashboardPage from "./room_management/pages/RoomDashboardPage";
-
-/* ================= IMPORT TANSTACK QUERY ================= */
-import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import "./index.css";
-
-/* ================= APP COMPONENT ================= */
-import App from "./App"; // We now import App to handle the initial Auth check
 
 import { AllocationRoutes } from "./room_allocation";
 import WardenAllocationPage from "./room_allocation/pages/WardenAllocationPage";
-import WardenOverviewTab from "./room_allocation/pages/WardenOverviewTab";
-import WardenLayoutTab from "./room_allocation/pages/WardenLayoutTab";
-import WardenRoomGridTab from "./room_allocation/pages/WardenRoomGridTab";
-import WardenRemainingTab from "./room_allocation/pages/WardenRemainingTab";
 
 /* ================= AUTH ================= */
 import Login from "./auth/login";
@@ -43,12 +32,7 @@ import PendingPage from "./attendant/PendingPage";
 import ApprovedPage from "./attendant/ApprovedPage";
 import RejectedPage from "./attendant/RejectedPage";
 import ComplaintsPage from "./attendant/ComplaintsPage";
-
-/* ================= ADMIN PANEL ================= */
-import AdminPanelLayout from "./admin/AdminLayout";
-import AdminHome from "./admin/AdminHome";
-import StudentSearchPage from "./admin/StudentSearchPage";
-import RequireRole from "./admin/RequireRole";
+import Admin from "./admin/admin";
 
 /* ================= GUARD ================= */
 import GuardLayout from "./guard/GuardLayout";
@@ -80,16 +64,6 @@ function ErrorPage() {
   );
 }
 
-/* ================= INITIALIZE TANSTACK QUERY ================= */
-const queryClient = new QueryClient({
-  defaultOptions: {
-    queries: {
-      staleTime: 1000 * 60 * 5, // Keep cache fresh for 5 minutes
-      refetchOnWindowFocus: false, // Do not refetch when switching browser tabs
-    },
-  },
-});
-
 // Check if AllocationRoutes is an array of objects or single route element
 const parsedAllocationRoutes = Array.isArray(AllocationRoutes)
   ? AllocationRoutes
@@ -99,9 +73,7 @@ const parsedAllocationRoutes = Array.isArray(AllocationRoutes)
 const router = createBrowserRouter([
   {
     path: "/",
-    // Point the root to App.jsx so your auth and role redirection logic actually runs
-    element: <App />,
-    errorElement: <ErrorPage />,
+    element: <Navigate to="/signin" replace />,
   },
   {
     path: "/signin",
@@ -142,22 +114,8 @@ const router = createBrowserRouter([
   },
   {
     path: "/admin",
-    element: (
-      <RequireRole allowedRoles={["warden"]}>
-        <AdminPanelLayout />
-      </RequireRole>
-    ),
+    element: <Admin />,
     errorElement: <ErrorPage />,
-    children: [
-      {
-        index: true,
-        element: <AdminHome />,
-      },
-      {
-        path: "students",
-        element: <StudentSearchPage />,
-      },
-    ],
   },
   {
     path: "/attendant",
@@ -214,22 +172,6 @@ const router = createBrowserRouter([
     path: "/warden",
     element: <WardenAllocationPage />,
     errorElement: <ErrorPage />,
-    children: [
-      { index: true, element: <Navigate to="overview" replace /> },
-      { path: "overview", element: <WardenOverviewTab /> },
-      { path: "layout-builder", element: <WardenLayoutTab /> },
-      { path: "room-grid", element: <WardenRoomGridTab /> },
-      { path: "remaining", element: <WardenRemainingTab /> },
-    ]
-  },
-  {
-    path: "/room-management",
-    element: (
-      <RequireRole allowedRoles={["warden"]}>
-        <RoomDashboardPage />
-      </RequireRole>
-    ),
-    errorElement: <ErrorPage />,
   },
   {
     path: "/chief-warden",
@@ -250,9 +192,6 @@ const router = createBrowserRouter([
 /* ================= RENDER ================= */
 createRoot(document.getElementById("root")).render(
   <StrictMode>
-    {/* Wrap the RouterProvider with QueryClientProvider */}
-    <QueryClientProvider client={queryClient}>
-      <RouterProvider router={router} />
-    </QueryClientProvider>
+    <RouterProvider router={router} />
   </StrictMode>
 );
