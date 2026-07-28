@@ -88,6 +88,9 @@ const router = createBrowserRouter([
   {
     path: "/verify-otp",
     element: <OtpVerification />,
+    errorElement: <ErrorPage />,
+  },
+  {
     path: "/face/enroll",
     element: <EnrollFace />,
     errorElement: <ErrorPage />,
