@@ -50,49 +50,56 @@ export default function App() {
   }
 
   /* ================= ROLE REDIRECTS ================= */
-  switch (role) {
-    case "student":
-      return <Navigate to="/student" replace />;
 
-    case "attendant":
-      return <Navigate to="/attendant" replace />;
+ /* ================= ROLE REDIRECTS ================= */
 
-    case "guard":
-      return <Navigate to="/guard" replace />;
-      
-    // Added new roles for Room Management Module.
-    // Same role string covers Warden/Chief Warden/Super Admin (see
-    // roomAccess.js authority_level scheme); only level 2 is "the Warden"
-    // and lands on their existing dashboard. Levels 1/3 use the Admin Panel.
-    case "warden":
-      return <Navigate to={authorityLevel === 2 ? "/warden" : "/admin"} replace />;
+switch (role) {
 
-    case "chief_warden":
-      return <Navigate to="/chief-warden" replace />;
+  case "student":
+    return <Navigate to="/student" replace />;
 
-    case "admin":
-      return <Navigate to="/admin" replace />;
+  case "attendant":
+    return <Navigate to="/attendant" replace />;
 
-    default:
-      /* INVALID ROLE */
-      localStorage.removeItem("token");
-      localStorage.removeItem("role");
+  case "guard":
+    return <Navigate to="/guard" replace />;
 
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
-          <div className="bg-white border shadow-xl rounded-3xl p-10 max-w-md text-center">
-            <h1 className="text-4xl font-bold text-red-600">Invalid Role</h1>
-            <p className="text-gray-500 mt-3">
-              Your session role is invalid or expired.
-            </p>
-            <button
-              onClick={() => window.location.reload()}
-              className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
-            >
-              Login Again
-            </button>
-          </div>
+  case "warden":
+    return <Navigate to="/warden" replace />;
+
+  case "chief-warden":
+    return <Navigate to="/chief-warden" replace />;
+
+  default:
+
+    localStorage.removeItem("token");
+    localStorage.removeItem("role");
+
+    return (
+
+      <div className="min-h-screen flex items-center justify-center bg-gray-100 p-6">
+
+        <div className="bg-white border shadow-xl rounded-3xl p-10 max-w-md text-center">
+
+          <h1 className="text-4xl font-bold text-red-600">
+            Invalid Role
+          </h1>
+
+          <p className="text-gray-500 mt-3">
+            Your session role is invalid or expired.
+          </p>
+
+          <button
+            onClick={() => window.location.reload()}
+            className="mt-6 bg-[#6d0f16] hover:bg-[#530b11] text-white px-6 py-3 rounded-2xl transition"
+          >
+            Login Again
+          </button>
+
         </div>
-      );
-  }
+
+      </div>
+
+    );
+}
 }

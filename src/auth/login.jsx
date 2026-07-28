@@ -1,5 +1,4 @@
 import {
-  useEffect,
   useState,
 } from "react";
 
@@ -17,32 +16,43 @@ function Login() {
   const navigate =
     useNavigate();
 
+  const inferRole = (role, emailValue) => {
+    const normalizedEmail = String(emailValue || "").toLowerCase();
+
+    if (normalizedEmail.includes("attendant")) return "attendant";
+    if (normalizedEmail.includes("chief")) return "chief-warden";
+    if (normalizedEmail.includes("warden")) return "warden";
+    if (normalizedEmail.includes("guard")) return "guard";
+    if (normalizedEmail.includes("gate")) return "guard";
+
+    return role || "student";
+  };
+
   /* ================= REDIRECT ================= */
 
-  const getRedirectPath = (
-    role,
-    authorityLevel
-  ) => {
+ const getRedirectPath = (role) => {
 
-    switch (role) {
+  switch (role) {
 
-      case "guard":
-        return "/guard";
+    case "student":
+      return "/student";
 
-      case "attendant":
-        return "/attendant";
+    case "attendant":
+      return "/attendant";
 
-      case "warden":
-        // Same role string covers Warden/Chief Warden/Super Admin (see
-        // roomAccess.js authority_level scheme); only level 2 is "the Warden"
-        // and lands on their existing dashboard. Levels 1/3 use the Admin Panel.
-        return authorityLevel === 2 ? "/warden" : "/admin";
+    case "guard":
+      return "/guard";
 
-      case "student":
-      default:
-        return "/student";
-    }
-  };
+    case "warden":
+      return "/warden";
+
+    case "chief-warden":
+      return "/chief-warden";
+
+    default:
+      return "/student";
+  }
+};
 
   /* ================= STATE ================= */
 
@@ -53,7 +63,7 @@ function Login() {
 
       password: "",
 
-      role: "student",
+      // role: "student",
     });
 
   const [error, setError] =
@@ -74,39 +84,6 @@ function Login() {
     });
   };
 
-  /* ================= CHECK AUTH ================= */
-
-  useEffect(() => {
-
-    const token =
-      localStorage.getItem(
-        "token"
-      );
-
-    const role =
-      localStorage.getItem(
-        "role"
-      );
-
-    if (
-      token &&
-      role
-    ) {
-
-      let authorityLevel;
-      try {
-        authorityLevel = JSON.parse(localStorage.getItem("user") || "{}")?.authority_level;
-      } catch {
-        authorityLevel = undefined;
-      }
-
-      navigate(
-        getRedirectPath(role, authorityLevel)
-      );
-    }
-
-  }, [navigate]);
-
   /* ================= LOGIN ================= */
 
   const handleLogin =
@@ -116,8 +93,8 @@ function Login() {
 
       if (
         !formData.email ||
-        !formData.password ||
-        !formData.role
+        !formData.password 
+        // !formData.role
       ) {
 
         setError(
@@ -134,7 +111,7 @@ function Login() {
         setError("");
 
         const data =
-          await apiFetch(
+          (await apiFetch(
             "/api/auth/login",
             {
               method: "POST",
@@ -147,35 +124,40 @@ function Login() {
                 password:
                   formData.password,
 
-                role:
-                  formData.role,
+                role: inferRole(
+                  "student",
+                  formData.email
+                ),
               }),
             }
-          );
+          )) || {};
 
-        localStorage.setItem(
-          "token",
-          data.token
-        );
+if (data?.success && data?.message === "OTP generated") {
+  navigate("/verify-otp", { state: { email: formData.email } });
+  return;
+}
 
-        localStorage.setItem(
-          "role",
-          formData.role
-        );
+const role = data?.role || "student";
+const normalizedRole = inferRole(role, formData.email);
 
-        localStorage.setItem(
-          "user",
-          JSON.stringify(
-            data.user
-          )
-        );
+if (data?.token) {
+  localStorage.setItem("token", data.token);
+  localStorage.setItem("role", normalizedRole);
 
-        navigate(
-          getRedirectPath(
-            formData.role,
-            data.user?.authority_level
-          )
-        );
+  localStorage.setItem(
+    "user",
+    JSON.stringify({
+      ...data.user,
+      token: data.token,
+      role: normalizedRole,
+    })
+  );
+
+  navigate(getRedirectPath(normalizedRole));
+  return;
+}
+
+setError(data?.message || "Login failed");
 
       } catch (err) {
 
@@ -282,7 +264,7 @@ function Login() {
 
           {/* ROLE */}
 
-          <select
+          {/* <select
             name="role"
             value={formData.role}
             onChange={handleChange}
@@ -312,7 +294,7 @@ function Login() {
 
             </option>
 
-          </select>
+          </select> */}
 
           {/* BUTTON */}
 

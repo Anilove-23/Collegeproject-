@@ -24,6 +24,7 @@ import WardenRemainingTab from "./room_allocation/pages/WardenRemainingTab";
 /* ================= AUTH ================= */
 import Login from "./auth/login";
 import Signup from "./auth/signup";
+import OtpVerification from "./auth/OtpVerification";
 
 /* ================= FACE RECOGNITION ================= */
 import EnrollFace from "./face_recognition/EnrollFace";
@@ -113,6 +114,8 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
   {
+    path: "/verify-otp",
+    element: <OtpVerification />,
     path: "/face/enroll",
     element: <EnrollFace />,
     errorElement: <ErrorPage />,
