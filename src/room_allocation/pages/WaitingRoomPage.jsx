@@ -183,9 +183,9 @@ export default function WaitingRoomPage() {
 
   // Use TanStack Query for batches instead of useEffect
   const { data: batchesData } = useQuery({
-    queryKey: ['batches', state?.hostelId],
-    queryFn: () => getBatches(state.hostelId),
-    enabled: !!state?.hostelId,
+    queryKey: ['batches', state?.eventId],
+    queryFn: () => getBatches(state?.eventId),
+    enabled: !!state?.eventId,
     staleTime: 30_000,
     select: (res) => res.batches || res.result || [],
   });

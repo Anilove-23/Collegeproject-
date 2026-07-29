@@ -85,7 +85,7 @@ export default function PreferenceBuilder({
         />
       )}
 
-      {onClose && !isLiveMode && (
+      {onClose && (
         <div className="flex justify-end -mt-2 mb-2">
           <button 
             onClick={onClose}
