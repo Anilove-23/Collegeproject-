@@ -38,9 +38,8 @@ import Admin from "./admin/admin";
 /* ================= GUARD ================= */
 import GuardLayout from "./guard/GuardLayout";
 import Dashboard from "./guard/Dashboard";
-import ExitPage from "./guard/ExitPage";
-import ReturnPage from "./guard/ReturnPage";
 
+import GateLogs from "./guard/GateLogs";
 import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
 import Warden from "./warden/warden";
 
@@ -162,13 +161,10 @@ const router = createBrowserRouter([
         element: <Dashboard />,
       },
       {
-        path: "exit",
-        element: <ExitPage />,
+        path: "logs",
+        element: <GateLogs />,
       },
-      {
-        path: "return",
-        element: <ReturnPage />,
-      },
+      
     ],
   },
   ...parsedAllocationRoutes,
