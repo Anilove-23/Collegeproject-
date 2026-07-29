@@ -52,8 +52,10 @@ export const getGroupMembers = (groupId) =>
   client.get(`/groups/${groupId}/members`);
 
 /** Get all groups (used for browse/public squads view). */
-export const getAllGroups = () =>
-  client.get('/groups/');
+export const getAllGroups = (eventId) => {
+  const url = eventId ? `/groups/?eventId=${eventId}` : '/groups/';
+  return client.get(url);
+};
 
 /** Search students by name or roll number (privacy-safe response). */
 export const searchStudents = (q) => {

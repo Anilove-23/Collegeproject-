@@ -71,15 +71,15 @@ export default function TopNav({ liveStatus = false, onToggleSidebar }) {
     else return alert(`Cannot advance from ${state.phase}`);
 
     if (confirm(`Advance phase to ${targetPhase}?`)) {
-      triggerDevPhase(state.hostelId, targetPhase)
+      triggerDevPhase(state.eventId, targetPhase)
         .catch(err => alert(err.message || 'Error advancing phase'));
     }
   };
 
   const handleResetPhase = () => {
     if (!state) return;
-    if (confirm(`Reset entire hostel to LOBBY? This deletes ALL groups, batches, and room locks.`)) {
-      triggerResetPhase(state.hostelId)
+    if (confirm(`Reset entire event to LOBBY? This deletes ALL groups, batches, and room locks.`)) {
+      triggerResetPhase(state.eventId)
         .catch(err => alert(err.message || 'Error resetting phase'));
     }
   };

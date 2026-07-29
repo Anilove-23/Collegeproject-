@@ -295,7 +295,7 @@ function InviteInbox({ pendingRequests, onAccept, onReject }) {
 /* ══════════════════════════════════════════════════════════════
    COMPONENT 4 — CENTER BOTTOM PANEL
 ══════════════════════════════════════════════════════════════ */
-function CenterBottomPanel({ state, publicSquads, pendingRequests, onApplyToSquad }) {
+function CenterBottomPanel({ state, publicSquads, pendingRequests, onApplyToSquad, loadingSquads }) {
   const [squadSearch, setSquadSearch] = useState('');
 
   if (state.hasSquad) {
@@ -335,7 +335,9 @@ function CenterBottomPanel({ state, publicSquads, pendingRequests, onApplyToSqua
         />
       </div>
       <div className="flex-1 overflow-y-auto">
-        {filteredSquads.length === 0 
+        {loadingSquads 
+          ? <p className="text-[12px] text-text-muted text-center py-5">Loading squads...</p>
+          : filteredSquads.length === 0 
           ? <p className="text-[12px] text-text-muted text-center py-5">No active forming squads found</p>
           : filteredSquads.map(sq => (
             <div 
@@ -411,10 +413,10 @@ export default function SquadLobbyPage() {
   const members = membersData ?? [];
 
   // ── TanStack Query: public groups (replaces useEffect + getAllGroups) ──
-  const { data: publicSquadsData } = useQuery({
-    queryKey: [...groupKeys.all, 'public'],
-    queryFn:  () => getAllGroups(),
-    enabled:  !state?.hasSquad,
+  const { data: publicSquadsData, isLoading: loadingSquads } = useQuery({
+    queryKey: [...groupKeys.all, 'public', state?.eventId],
+    queryFn:  () => getAllGroups(state?.eventId),
+    enabled:  !state?.hasSquad && !!state?.eventId,
     staleTime: 30_000,
     select:   (res) => (res.groups ?? []).filter(g => g.status === 'FORMING'),
   });
@@ -527,7 +529,7 @@ export default function SquadLobbyPage() {
 
           {/* CENTER */}
           <div className="flex flex-col gap-5 min-h-0 h-full">
-            <CenterBottomPanel state={state} publicSquads={publicSquads} pendingRequests={pendingRequests} onApplyToSquad={handleApplyToSquad} />
+            <CenterBottomPanel state={state} publicSquads={publicSquads} pendingRequests={pendingRequests} onApplyToSquad={handleApplyToSquad} loadingSquads={loadingSquads} />
           </div>
 
           {/* RIGHT */}

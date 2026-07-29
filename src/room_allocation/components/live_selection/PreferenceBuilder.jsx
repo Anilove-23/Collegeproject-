@@ -29,10 +29,11 @@ export default function PreferenceBuilder({
   onClose = null
 }) {
   const navigate = useNavigate();
-  const hostelId = allocationState?.hostelId ?? null;
+  const eventId = allocationState?.eventId ?? null;
   const isLeader = allocationState?.isLeader ?? false;
 
-  const { data: rooms = [], isLoading: loading } = useRooms(hostelId, studentId);
+  // The backend now expects eventId instead of hostelId for fetching the room pool
+  const { data: rooms = [], isLoading: loading } = useRooms(eventId, studentId);
   const { cart, add, remove, moveUp, moveDown, isInCart, isFull, MAX_PREFERENCES, clear } = usePreferenceCart(studentId);
   const [filters, setFilters] = useState(DEFAULT_FILTERS);
   const [isCartOpen, setIsCartOpen] = useState(false);
@@ -55,7 +56,7 @@ export default function PreferenceBuilder({
       await submitPreferences({
         groupId: allocationState?.groupId,
         submittedBy: studentId,
-        hostelId: allocationState?.hostelId,
+        hostelId: eventId, // Backend uses this field as eventId
         batchNumber: allocationState?.batchNumber,
         roundNumber: allocationState?.roundNumber ?? 1,
         preferences: roomIds,
