@@ -53,6 +53,15 @@ export default function PreferenceBuilder({
     }
 
     try {
+      const formattedPrefs = roomIds.map((id, index) => {
+        const r = rooms.find(room => room.id === id);
+        return {
+          rank: index + 1,
+          roomId: r?.roomNo || id,
+          type: r?.type || 'Unknown'
+        };
+      });
+
       await submitPreferences({
         groupId: allocationState?.groupId,
         submittedBy: studentId,
@@ -61,6 +70,9 @@ export default function PreferenceBuilder({
         roundNumber: allocationState?.roundNumber ?? 1,
         preferences: roomIds,
       });
+
+      localStorage.setItem(`submitted_prefs_${allocationState?.groupId}`, JSON.stringify(formattedPrefs));
+
       // Clear cart on successful submit to avoid stale data later
       clear();
       if (onClose) onClose();

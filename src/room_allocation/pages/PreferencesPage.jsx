@@ -1,3 +1,4 @@
+import { Navigate } from 'react-router-dom';
 import AllocationLayout from '../layouts/AllocationLayout';
 import PreferenceBuilder from '../components/live_selection/PreferenceBuilder';
 import { useActiveBatch } from '../hooks/useActiveBatch';
@@ -8,6 +9,15 @@ export default function PreferencesPage() {
   const studentId = user ? user.id : null;
 
   const { data: allocationState } = useActiveBatch(studentId);
+  const isLiveTurn = allocationState?.batchActive && !allocationState?.submitted && !allocationState?.isAllocated;
+
+  if (allocationState?.isAllocated) {
+    return <Navigate to="/allocation/results" replace />;
+  }
+
+  if (allocationState?.submitted) {
+    return <Navigate to="/allocation/selection/locked" replace />;
+  }
 
   return (
     <AllocationLayout phase="Selection Phase" batch="Preferences">
@@ -15,7 +25,7 @@ export default function PreferencesPage() {
         <PreferenceBuilder 
           studentId={studentId} 
           allocationState={allocationState} 
-          isLiveMode={false} 
+          isLiveMode={isLiveTurn} 
         />
       </div>
     </AllocationLayout>

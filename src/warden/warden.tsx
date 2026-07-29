@@ -589,6 +589,15 @@ export default function Warden() {
             </button>
           )}
 
+          {/* ROOM ALLOCATION BUTTON */}
+          <button
+            onClick={() => navigate('/allocation/admin')}
+            className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-semibold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+          >
+            <span>🏨</span>
+            <span>Room Allocation</span>
+          </button>
+
           {/* APPOINT ATTENDANT BUTTON */}
           <button
             onClick={() => setIsAppointModalOpen(true)}

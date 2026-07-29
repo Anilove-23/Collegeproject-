@@ -4,7 +4,6 @@ import TopNav from '../components/shared/TopNav';
 import { allocationSocket } from '../sockets/allocation.socket.js';
 import { useActiveBatch } from '../hooks/useActiveBatch';
 import { useAllocationSockets } from '../hooks/useAllocationSockets';
-import PreferenceBuilder from '../components/live_selection/PreferenceBuilder';
 
 /* ── Icons ────────────────────────────────────────────────────── */
 const GridIcon   = () => <svg width="15" height="15" viewBox="0 0 16 16" fill="none"><rect x="1" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="1" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="1" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/><rect x="9" y="9" width="6" height="6" rx="1" stroke="currentColor" strokeWidth="1.5"/></svg>;
@@ -26,8 +25,8 @@ const NAV_ITEMS = [
   { label: 'My Squad',  Icon: SquadIcon, to: '/allocation/squad'        },
   { label: 'Room Grid', Icon: RoomIcon,  to: '/allocation/room-grid'    },
   { label: 'Timeline',  Icon: ClockIcon, to: '/allocation/waiting-room' },
+  { label: 'Preferences', Icon: RoomIcon,  to: '/allocation/preferences' },
   { label: 'History',   Icon: HelpIcon,  to: '/allocation/history'      },
-  { label: 'Admin',     Icon: CogIcon,   to: '/allocation/admin'        },
   { label: 'Support',   Icon: HelpIcon,  to: null                      },
 ];
 
@@ -76,7 +75,6 @@ export default function AllocationLayout({
   useEffect(() => {
     if (allocState?.eventId) allocationSocket.joinHostel(allocState.eventId);
   }, [allocState?.eventId]);
-  const [showPopup, setShowPopup] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
   const navigate = useNavigate();
@@ -92,7 +90,6 @@ export default function AllocationLayout({
   });
 
   const isLiveTurn = allocState?.batchActive && !allocState?.submitted && !allocState?.isAllocated;
-  const displayPopup = isLiveTurn && showPopup;
 
   return (
     <div className="flex flex-col min-h-screen bg-canvas">
@@ -147,15 +144,16 @@ export default function AllocationLayout({
 
             {/* Sidebar nav items */}
             {/* eslint-disable-next-line no-unused-vars */}
-            {NAV_ITEMS.map(({ label, Icon, to }) =>
-              to ? (
+            {NAV_ITEMS.map(({ label, Icon, to }) => {
+              const isHighlight = isLiveTurn && label === 'Preferences';
+              return to ? (
                 /* Linked — NavLink handles active state automatically */
                 <NavLink
                   key={label}
                   to={to}
                   onClick={() => setIsSidebarOpen(false)}
                   className={({ isActive }) =>
-                    `${navBase} ${isActive ? navActive : navIdle}`
+                    `${navBase} ${isActive ? navActive : isHighlight ? 'bg-crimson/20 text-crimson animate-pulse border border-crimson' : navIdle}`
                   }
                 >
                   <span className="shrink-0"><Icon /></span>
@@ -171,8 +169,8 @@ export default function AllocationLayout({
                   <span className="shrink-0"><Icon /></span>
                   {label.toUpperCase()}
                 </span>
-              )
-            )}
+              );
+            })}
           </nav>
 
           {/* Bottom actions */}
@@ -195,21 +193,9 @@ export default function AllocationLayout({
           </div>
         </aside>
 
-        {/* ── Main content ─────────────────────────────────────── */}
+        {/* 🪟 Main content 🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟🪟 */}
         <main className="flex-1 min-w-0 p-7 overflow-y-auto relative">
           {children}
-
-          {/* ── Global Live Turn Pop-up ────────────────────────── */}
-          {displayPopup && (
-            <div className="absolute inset-0 bg-canvas z-50 overflow-y-auto">
-              <PreferenceBuilder 
-                studentId={studentId} 
-                allocationState={allocState} 
-                isLiveMode={true} 
-                onClose={() => setShowPopup(false)}
-              />
-            </div>
-          )}
         </main>
       </div>
     </div>

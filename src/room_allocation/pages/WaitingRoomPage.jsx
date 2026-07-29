@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query';
 import AllocationLayout from '../layouts/AllocationLayout';
 import { useActiveBatch } from '../hooks/useActiveBatch';
 import { useRoundState } from '../hooks/useRoundState';
+import { useCountdown } from '../hooks/useCountdown';
 import { getBatches } from '../api/allocation.api';
 import LoadingScreen from '../components/shared/LoadingScreen';
 
@@ -148,23 +149,6 @@ function SystemPhaseStepper({ currentPhase, batches, myBatchNumber }) {
   );
 }
 
-/* ─── Live countdown ─────────────────────────────────────────── */
-function useCountdown(targetDate) {
-  const [secs, setSecs] = useState(0);
-  useEffect(() => {
-    if (!targetDate) return;
-    const calc = () => Math.max(0, Math.floor((new Date(targetDate).getTime() - Date.now()) / 1000));
-    setSecs(calc());
-    const t = setInterval(() => setSecs(calc()), 1000);
-    return () => clearInterval(t);
-  }, [targetDate]);
-  if (!targetDate || secs === 0) return '—';
-  const hh = String(Math.floor(secs / 3600)).padStart(2, '0');
-  const mm = String(Math.floor((secs % 3600) / 60)).padStart(2, '0');
-  const ss = String(secs % 60).padStart(2, '0');
-  return `${hh}:${mm}:${ss}`;
-}
-
 /* ─── Icons ──────────────────────────────────────────────────── */
 const ArrowRight = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -195,7 +179,7 @@ export default function WaitingRoomPage() {
   const countdown   = useCountdown(state?.batchStartTime ?? null);
   const roundState  = useRoundState(state);          // socket-first, DB fallback
   const roundTimer  = useCountdown(roundState?.roundEndsAt ?? null);
-  const totalRounds = 6; // fixed 6 rounds per batch
+  const totalRounds = 3; // fixed 3 rounds per batch
   const currentRound = roundState?.roundNumber ?? null;
 
   if (loading || !state) return <LoadingScreen label="Checking Waiting Room..." />;
