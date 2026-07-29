@@ -14,11 +14,21 @@ function formatDate(date) {
 
 const LOCAL_LOGS_KEY = "guard_gate_audit_logs";
 const COMPLETED_OUTPASSES_KEY = "guard_completed_outpasses";
+const CACHED_OUTPASSES_KEY = "guard_cached_outpasses";
 
 export default function GuardDashboard() {
-  const [data, setData] = useState([]);
+  /* ================= PERSISTENT STATES ================= */
+  // 1. Data Cache (prevents data loss on page refresh)
+  const [data, setData] = useState(() => {
+    try {
+      const saved = localStorage.getItem(CACHED_OUTPASSES_KEY);
+      return saved ? JSON.parse(saved) : [];
+    } catch {
+      return [];
+    }
+  });
 
-  // Persistent Completed IDs in LocalStorage
+  // 2. Persistent Completed IDs
   const [completedIds, setCompletedIds] = useState(() => {
     try {
       const saved = localStorage.getItem(COMPLETED_OUTPASSES_KEY);
@@ -28,7 +38,7 @@ export default function GuardDashboard() {
     }
   });
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(() => data.length === 0);
   const [error, setError] = useState("");
   const [search, setSearch] = useState("");
 
@@ -37,13 +47,18 @@ export default function GuardDashboard() {
   const [hostel, setHostel] = useState("All");
 
   const [processingId, setProcessingId] = useState(null);
+  const [bulkProcessing, setBulkProcessing] = useState(false);
   const [remarks, setRemarks] = useState({});
+
+  /* ================= IN-CARD EXPAND & MULTI-SELECT STATE ================= */
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [expandedId, setExpandedId] = useState(null); // Accordion toggle per card
 
   /* ================= PAGINATION STATE ================= */
   const [page, setPage] = useState(1);
-  const limit = 6;
+  const limit = 9;
 
-  /* ================= FETCH INITIAL DATA ================= */
+  /* ================= FETCH INITIAL DATA & SYNC ================= */
   useEffect(() => {
     fetchInitialData();
   }, []);
@@ -52,9 +67,13 @@ export default function GuardDashboard() {
     localStorage.setItem(COMPLETED_OUTPASSES_KEY, JSON.stringify(completedIds));
   }, [completedIds]);
 
+  useEffect(() => {
+    localStorage.setItem(CACHED_OUTPASSES_KEY, JSON.stringify(data));
+  }, [data]);
+
   async function fetchInitialData() {
     try {
-      setLoading(true);
+      if (data.length === 0) setLoading(true);
       setError("");
       const result = await apiFetch("/api/outpasses/monitor");
 
@@ -68,13 +87,13 @@ export default function GuardDashboard() {
         ? result.outpasses
         : [];
 
-      // Strictly Approved outpasses only
       const approvedOnly = rawList.filter((o) => o.outp_status === "Approved");
+
       setData(approvedOnly);
+      localStorage.setItem(CACHED_OUTPASSES_KEY, JSON.stringify(approvedOnly));
     } catch (err) {
       console.error(err);
       setError(err.message || "Failed to load gate monitor records");
-      setData([]);
     } finally {
       setLoading(false);
     }
@@ -84,8 +103,22 @@ export default function GuardDashboard() {
     setRemarks((prev) => ({ ...prev, [id]: value }));
   };
 
-  /* ================= GATE ACTION ================= */
-  async function handleGateAction(record) {
+  /* ================= MULTI-SELECT HANDLERS ================= */
+  const toggleSelect = (id, e) => {
+    if (e) e.stopPropagation();
+    setSelectedIds((prev) =>
+      prev.includes(id) ? prev.filter((i) => i !== id) : [...prev, id]
+    );
+  };
+
+  const toggleExpand = (id, e) => {
+    e.stopPropagation();
+    setExpandedId((prev) => (prev === id ? null : id));
+  };
+
+  /* ================= GATE ACTION (SINGLE) ================= */
+  async function handleGateAction(record, e) {
+    if (e) e.stopPropagation();
     const outpassId = record.id || record.outpass_id;
     const isCurrentlyIn = record.std_status === "In" || !record.std_status;
     const targetAction = isCurrentlyIn ? "exit" : "enter";
@@ -108,7 +141,6 @@ export default function GuardDashboard() {
 
       const nowTimestamp = new Date().toISOString();
 
-      // APPEND LOG TO PERMANENT LOGS ARRAY IN LOCALSTORAGE
       const existingLogs = (() => {
         try {
           return JSON.parse(localStorage.getItem(LOCAL_LOGS_KEY)) || [];
@@ -134,14 +166,12 @@ export default function GuardDashboard() {
         JSON.stringify([newAuditLog, ...existingLogs])
       );
 
-      // IF RETURN, REMOVE FROM CARDS COMPLETELY
       if (targetAction === "enter") {
         setData((prev) =>
           prev.filter((item) => (item.id || item.outpass_id) !== outpassId)
         );
         setCompletedIds((prev) => [...prev, outpassId]);
       } else {
-        // IF EXIT, MARK AS OUT
         setData((prev) =>
           prev.map((item) => {
             const itemId = item.id || item.outpass_id;
@@ -154,11 +184,35 @@ export default function GuardDashboard() {
       }
 
       setRemarks((prev) => ({ ...prev, [outpassId]: "" }));
+      setSelectedIds((prev) => prev.filter((i) => i !== outpassId));
     } catch (err) {
       console.error(err);
       alert(err.message || `Failed to record ${targetAction}`);
     } finally {
       setProcessingId(null);
+    }
+  }
+
+  /* ================= BATCH GATE ACTION ================= */
+  async function handleBulkGateAction(actionType) {
+    if (!selectedIds.length) return;
+    try {
+      setBulkProcessing(true);
+      const targets = data.filter((o) => {
+        const id = o.id || o.outpass_id;
+        const isCurrentlyIn = o.std_status === "In" || !o.std_status;
+        const recordTargetAction = isCurrentlyIn ? "exit" : "enter";
+        return selectedIds.includes(id) && recordTargetAction === actionType;
+      });
+
+      for (const record of targets) {
+        await handleGateAction(record, null);
+      }
+      setSelectedIds([]);
+    } catch (err) {
+      console.error("Bulk processing error", err);
+    } finally {
+      setBulkProcessing(false);
     }
   }
 
@@ -204,25 +258,34 @@ export default function GuardDashboard() {
     return filtered.slice(startIndex, startIndex + limit);
   }, [filtered, page, limit]);
 
+  const toggleSelectAllPage = () => {
+    const pageIds = paginatedList.map((o) => o.id || o.outpass_id);
+    const allSelected = pageIds.every((id) => selectedIds.includes(id));
+
+    if (allSelected) {
+      setSelectedIds((prev) => prev.filter((id) => !pageIds.includes(id)));
+    } else {
+      setSelectedIds((prev) => [...new Set([...prev, ...pageIds])]);
+    }
+  };
+
   return (
-    <div className="max-w-7xl mx-auto font-sans text-gray-800 space-y-6 p-4 sm:p-6">
+    <div className="max-w-7xl mx-auto font-sans text-gray-800 space-y-4 p-4 sm:p-6 relative pb-24">
       {/* HEADER BAR */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-5">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-gray-200 pb-4">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold text-[#6d0f16] tracking-tight">
-            Gate Movement Terminal
+          <h1 className="text-xl sm:text-2xl font-black text-[#6d0f16] tracking-tight">
+            Gate Terminal
           </h1>
-          <p className="text-gray-500 text-sm mt-1">
-            Real-time verification for active and approved student outpasses
+          <p className="text-gray-500 text-xs mt-0.5">
+            Real-time movement tracking with persistent local state
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="bg-blue-50/80 border border-blue-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px] shadow-xs">
-            <p className="text-[10px] font-extrabold text-blue-700 uppercase tracking-wider">
-              Inside Campus
-            </p>
-            <p className="text-2xl font-black text-blue-900 mt-0.5">
+        <div className="flex items-center gap-2">
+          <div className="bg-blue-50/80 border border-blue-200 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+            <p className="text-[9px] font-bold text-blue-700 uppercase">Inside</p>
+            <p className="text-lg font-black text-blue-900 leading-tight">
               {
                 data.filter(
                   (d) =>
@@ -232,11 +295,9 @@ export default function GuardDashboard() {
               }
             </p>
           </div>
-          <div className="bg-amber-50/80 border border-amber-200 rounded-2xl px-4 py-2.5 text-center min-w-[110px] shadow-xs">
-            <p className="text-[10px] font-extrabold text-amber-700 uppercase tracking-wider">
-              Currently Out
-            </p>
-            <p className="text-2xl font-black text-amber-900 mt-0.5">
+          <div className="bg-amber-50/80 border border-amber-200 rounded-xl px-3 py-1.5 text-center min-w-[90px]">
+            <p className="text-[9px] font-bold text-amber-700 uppercase">Outside</p>
+            <p className="text-lg font-black text-amber-900 leading-tight">
               {
                 data.filter(
                   (d) =>
@@ -250,27 +311,27 @@ export default function GuardDashboard() {
       </div>
 
       {error && (
-        <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 text-sm font-medium flex items-center gap-2">
+        <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-3 text-xs font-medium flex items-center gap-2">
           <span>⚠️</span>
           <p>{error}</p>
         </div>
       )}
 
       {/* FILTER TOOLBAR */}
-      <div className="bg-white border border-gray-200/90 rounded-3xl p-5 space-y-4 shadow-xs">
-        <div className="flex flex-col md:flex-row items-center gap-3">
+      <div className="bg-white border border-gray-200/90 rounded-2xl p-3.5 space-y-3 shadow-xs">
+        <div className="flex flex-col md:flex-row items-center gap-2.5">
           <div className="relative flex-1 w-full">
             <input
               type="text"
-              placeholder="Search student, roll no, room, destination..."
+              placeholder="Search student, roll, hostel, destination..."
               value={search}
               onChange={(e) => {
                 setSearch(e.target.value);
                 setPage(1);
               }}
-              className="w-full bg-gray-50/80 border border-gray-200 rounded-2xl px-4 py-3 pl-10 text-sm outline-none focus:bg-white focus:border-[#6d0f16] focus:ring-2 focus:ring-[#6d0f16]/10 transition"
+              className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 pl-9 text-xs outline-none focus:bg-white focus:border-[#6d0f16] transition"
             />
-            <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-xs">
               🔍
             </span>
           </div>
@@ -281,7 +342,7 @@ export default function GuardDashboard() {
               setHostel(e.target.value);
               setPage(1);
             }}
-            className="w-full md:w-auto border border-gray-200 bg-gray-50/80 rounded-2xl px-4 py-3 text-sm font-medium outline-none focus:bg-white focus:border-[#6d0f16] transition cursor-pointer"
+            className="w-full md:w-auto border border-gray-200 bg-gray-50/80 rounded-xl px-3 py-2 text-xs font-medium outline-none focus:bg-white focus:border-[#6d0f16] cursor-pointer"
           >
             <option value="All">All Hostels</option>
             {[
@@ -298,34 +359,45 @@ export default function GuardDashboard() {
           </select>
         </div>
 
-        {/* DUAL FILTERS ROW */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pt-3 border-t border-gray-100">
-          {/* Movement Status Filter */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mr-1">
-              Status:
-            </span>
-            {["All", "In", "Out"].map((s) => (
-              <button
-                key={s}
-                onClick={() => {
-                  setStatus(s);
-                  setPage(1);
-                }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
-                  status === s
-                    ? "bg-[#6d0f16] text-white shadow-xs"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-600"
-                }`}
-              >
-                {s === "In" ? "🏠 Inside" : s === "Out" ? "🚶 Outside" : "All Movement"}
-              </button>
-            ))}
+        {/* DUAL FILTERS & SELECT ALL ROW */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-2.5 border-t border-gray-100 text-xs">
+          <div className="flex items-center gap-3 flex-wrap">
+            <button
+              onClick={toggleSelectAllPage}
+              className="text-xs font-bold text-[#6d0f16] bg-red-50 hover:bg-red-100 border border-red-200 px-2.5 py-1 rounded-lg transition cursor-pointer"
+            >
+              {paginatedList.every((o) =>
+                selectedIds.includes(o.id || o.outpass_id)
+              ) && paginatedList.length > 0
+                ? "Deselect Page"
+                : "Select Page"}
+            </button>
+
+            <div className="flex items-center gap-1">
+              <span className="text-[10px] font-bold uppercase text-gray-400 mr-1">
+                Status:
+              </span>
+              {["All", "In", "Out"].map((s) => (
+                <button
+                  key={s}
+                  onClick={() => {
+                    setStatus(s);
+                    setPage(1);
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
+                    status === s
+                      ? "bg-[#6d0f16] text-white"
+                      : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                  }`}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
 
-          {/* Outpass Type Filter (Local vs Outstation) */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-xs font-bold uppercase tracking-wider text-gray-400 mr-1">
+          <div className="flex items-center gap-1">
+            <span className="text-[10px] font-bold uppercase text-gray-400 mr-1">
               Pass Type:
             </span>
             {["All", "Local", "Outstation"].map((t) => (
@@ -335,13 +407,13 @@ export default function GuardDashboard() {
                   setTypeFilter(t);
                   setPage(1);
                 }}
-                className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold transition-all cursor-pointer ${
+                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition cursor-pointer ${
                   typeFilter === t
-                    ? "bg-slate-800 text-white shadow-xs"
-                    : "bg-gray-100 hover:bg-gray-200 text-gray-600"
+                    ? "bg-slate-800 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
                 }`}
               >
-                {t === "Local" ? "📍 Local" : t === "Outstation" ? "✈️ Outstation" : "All Types"}
+                {t}
               </button>
             ))}
           </div>
@@ -350,124 +422,136 @@ export default function GuardDashboard() {
 
       {/* CARDS GRID */}
       {loading ? (
-        <div className="bg-white rounded-3xl border border-gray-100 p-12 text-center text-gray-500 shadow-xs flex flex-col items-center justify-center space-y-3">
-          <div className="w-8 h-8 border-4 border-[#6d0f16] border-t-transparent rounded-full animate-spin"></div>
-          <p className="font-medium text-sm">Loading active gate records...</p>
+        <div className="bg-white rounded-2xl border border-gray-100 p-8 text-center text-gray-500 shadow-xs flex flex-col items-center justify-center space-y-2">
+          <div className="w-6 h-6 border-3 border-[#6d0f16] border-t-transparent rounded-full animate-spin"></div>
+          <p className="font-medium text-xs">Loading active passes...</p>
         </div>
       ) : filtered.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-3xl p-12 text-center text-gray-400 text-sm font-medium shadow-xs">
+        <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center text-gray-400 text-xs font-medium shadow-xs">
           No matching active outpasses found
         </div>
       ) : (
-        <div className="space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
             {paginatedList.map((o) => {
               const targetId = o.id || o.outpass_id;
               const isProcessing = processingId === targetId;
               const isInCampus = o.std_status === "In" || !o.std_status;
               const isOutstation =
                 (o.outpass_type || o.type || "").toLowerCase() === "outstation";
+              const isSelected = selectedIds.includes(targetId);
+              const isExpanded = expandedId === targetId;
 
               return (
                 <div
                   key={targetId}
-                  className="bg-white border border-gray-200/90 rounded-3xl p-5 shadow-xs hover:shadow-md transition-all flex flex-col justify-between space-y-4"
+                  className={`bg-white border rounded-2xl p-3 shadow-xs hover:shadow-md transition-all relative flex flex-col justify-between space-y-2.5 ${
+                    isSelected
+                      ? "border-[#6d0f16] ring-1 ring-[#6d0f16]/30 bg-red-50/10"
+                      : "border-gray-200/90"
+                  }`}
                 >
-                  <div className="space-y-3.5">
-                    {/* TOP TITLE ROW & BADGES */}
-                    <div className="flex items-start justify-between gap-2">
+                  {/* TOP ROW: CHECKBOX + COMPACT INFO */}
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <input
+                        type="checkbox"
+                        checked={isSelected}
+                        onChange={(e) => toggleSelect(targetId, e)}
+                        className="w-4 h-4 accent-[#6d0f16] rounded cursor-pointer shrink-0"
+                      />
                       <div className="min-w-0">
-                        <h2 className="text-lg font-bold text-gray-900 tracking-tight truncate">
+                        <h2 className="text-xs font-black text-gray-900 truncate">
                           {o.name}
                         </h2>
-                        <p className="text-xs font-semibold text-gray-400 truncate mt-0.5">
-                          {o.roll_no || "No Roll"} • {o.department || "N/A"}
+                        <p className="text-[10px] font-semibold text-gray-400 truncate">
+                          {o.roll_no || "No Roll"} • {o.hostel} ({o.room || "-"})
                         </p>
-                      </div>
-
-                      <div className="flex flex-col items-end gap-1.5 shrink-0">
-                        <span
-                          className={`px-2.5 py-1 rounded-full text-[11px] font-bold border ${
-                            isInCampus
-                              ? "bg-blue-50 text-blue-700 border-blue-200"
-                              : "bg-amber-50 text-amber-700 border-amber-200"
-                          }`}
-                        >
-                          {isInCampus ? "🏠 Inside" : "🚶 Outside"}
-                        </span>
-
-                        <span
-                          className={`px-2.5 py-0.5 rounded-md text-[10px] font-bold tracking-wide uppercase ${
-                            isOutstation
-                              ? "bg-purple-50 text-purple-700 border border-purple-200"
-                              : "bg-teal-50 text-teal-700 border border-teal-200"
-                          }`}
-                        >
-                          {isOutstation ? "✈️ Outstation" : "📍 Local"}
-                        </span>
                       </div>
                     </div>
 
-                    {/* DETAILS GRID */}
-                    <div className="grid grid-cols-2 gap-2 text-xs">
-                      <Detail label="Hostel" value={o.hostel} />
-                      <Detail label="Room" value={o.room} />
-                      <Detail label="Phone" value={o.phone} />
-                      <Detail label="Parent Contact" value={o.parent_contact} />
-                      <Detail label="Destination" value={o.place_of_visit} />
-                      <Detail label="Purpose" value={o.purpose} />
-                    </div>
-
-                    {/* TIMESTAMPS */}
-                    <div className="pt-2 border-t border-gray-100 grid grid-cols-2 gap-2 text-xs">
-                      <div className="bg-gray-50/80 p-2 rounded-xl border border-gray-100">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          Departure
-                        </p>
-                        <p className="font-semibold text-gray-800 truncate mt-0.5">
-                          {formatDate(o.departure_datetime)}
-                        </p>
-                      </div>
-
-                      <div className="bg-gray-50/80 p-2 rounded-xl border border-gray-100">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wider">
-                          Expected Return
-                        </p>
-                        <p className="font-semibold text-gray-800 truncate mt-0.5">
-                          {formatDate(o.arrival_datetime)}
-                        </p>
-                      </div>
+                    <div className="flex flex-col items-end gap-1 shrink-0">
+                      <span
+                        className={`px-2 py-0.5 rounded-full text-[9px] font-bold border ${
+                          isInCampus
+                            ? "bg-blue-50 text-blue-700 border-blue-200"
+                            : "bg-amber-50 text-amber-700 border-amber-200"
+                        }`}
+                      >
+                        {isInCampus ? "🏠 In" : "🚶 Out"}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.5 rounded text-[8px] font-bold uppercase ${
+                          isOutstation
+                            ? "bg-purple-50 text-purple-700 border border-purple-200"
+                            : "bg-teal-50 text-teal-700 border border-teal-200"
+                        }`}
+                      >
+                        {isOutstation ? "Outstation" : "Local"}
+                      </span>
                     </div>
                   </div>
 
-                  {/* GUARD REMARKS & ACTION */}
-                  <div className="pt-3 border-t border-gray-100 space-y-2.5">
-                    <input
-                      type="text"
-                      placeholder="Add guard remark..."
-                      value={remarks[targetId] || ""}
-                      onChange={(e) => handleRemarkChange(targetId, e.target.value)}
-                      className="w-full bg-gray-50/80 border border-gray-200 rounded-xl px-3 py-2 text-xs outline-none focus:bg-white focus:border-[#6d0f16] transition"
-                    />
+                  {/* SUMMARY INFO */}
+                  <div className="bg-gray-50/80 p-2 rounded-xl border border-gray-100 text-[11px] space-y-1">
+                    <div className="flex justify-between text-gray-600">
+                      <span className="text-gray-400 font-bold">Visit:</span>
+                      <span className="font-semibold truncate max-w-[140px]">
+                        {o.place_of_visit || "-"}
+                      </span>
+                    </div>
+                    <div className="flex justify-between text-gray-600">
+                      <span className="text-gray-400 font-bold">Return:</span>
+                      <span className="font-semibold truncate">
+                        {formatDate(o.arrival_datetime)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* SLIDE-DOWN DETAILS ACCORDION */}
+                  {isExpanded && (
+                    <div className="pt-2 border-t border-gray-100 text-[11px] space-y-2 animate-in fade-in zoom-in-95 duration-100">
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <Detail label="Phone" value={o.phone} />
+                        <Detail label="Parent" value={o.parent_contact} />
+                        <Detail label="Purpose" value={o.purpose} />
+                        <Detail label="Departure" value={formatDate(o.departure_datetime)} />
+                      </div>
+
+                      <input
+                        type="text"
+                        placeholder="Add guard remark..."
+                        value={remarks[targetId] || ""}
+                        onChange={(e) => handleRemarkChange(targetId, e.target.value)}
+                        className="w-full bg-gray-50 border border-gray-200 rounded-lg px-2.5 py-1.5 text-[11px] outline-none focus:border-[#6d0f16]"
+                      />
+                    </div>
+                  )}
+
+                  {/* ACTION BAR: MARK EXIT/RETURN + TOGGLE DETAILS */}
+                  <div className="flex items-center gap-1.5 pt-1">
+                    <button
+                      onClick={(e) => toggleExpand(targetId, e)}
+                      className="px-2 py-1.5 rounded-xl border border-gray-200 hover:bg-gray-100 text-gray-600 font-bold text-[10px] transition cursor-pointer shrink-0"
+                    >
+                      {isExpanded ? "Less ▲" : "Details ▼"}
+                    </button>
 
                     <button
-                      onClick={() => handleGateAction(o)}
+                      onClick={(e) => handleGateAction(o, e)}
                       disabled={isProcessing}
-                      className={`w-full py-2.5 rounded-2xl font-bold text-xs transition-all shadow-xs active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-1.5 cursor-pointer ${
+                      className={`flex-1 py-1.5 rounded-xl font-bold text-[11px] transition-all shadow-2xs active:scale-[0.99] disabled:opacity-50 flex items-center justify-center gap-1 cursor-pointer ${
                         isInCampus
                           ? "bg-[#6d0f16] hover:bg-[#530b11] text-white"
                           : "bg-emerald-600 hover:bg-emerald-700 text-white"
                       }`}
                     >
                       {isProcessing ? (
-                        <>
-                          <span className="w-3.5 h-3.5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-                          <span>Recording...</span>
-                        </>
+                        <span className="w-3 h-3 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                       ) : isInCampus ? (
-                        <span>Mark Exit 🚪 ➔</span>
+                        <span>Mark Exit 🚪</span>
                       ) : (
-                        <span>Mark Return & Complete 🏠 ➔</span>
+                        <span>Mark Return 🏠</span>
                       )}
                     </button>
                   </div>
@@ -477,29 +561,61 @@ export default function GuardDashboard() {
           </div>
 
           {/* PAGINATION */}
-          <div className="bg-white border border-gray-200 rounded-2xl p-3.5 shadow-xs flex items-center justify-between text-xs text-gray-500 font-medium">
+          <div className="bg-white border border-gray-200 rounded-xl p-3 shadow-xs flex items-center justify-between text-xs text-gray-500 font-medium">
             <p>
               Page <span className="font-bold text-gray-800">{page}</span> of{" "}
               <span className="font-bold text-gray-800">{totalPages}</span> ({totalItems} passes)
             </p>
 
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1">
               <button
                 disabled={page <= 1}
                 onClick={() => setPage((p) => Math.max(p - 1, 1))}
-                className="px-3 py-1.5 rounded-xl border border-gray-300 text-xs font-semibold bg-white text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition shadow-xs cursor-pointer"
+                className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs font-semibold bg-white text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition cursor-pointer"
               >
-                Previous
+                Prev
               </button>
 
               <button
                 disabled={page >= totalPages}
                 onClick={() => setPage((p) => Math.min(p + 1, totalPages))}
-                className="px-3 py-1.5 rounded-xl border border-gray-300 text-xs font-semibold bg-white text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition shadow-xs cursor-pointer"
+                className="px-2.5 py-1 rounded-lg border border-gray-300 text-xs font-semibold bg-white text-gray-700 disabled:opacity-40 hover:bg-gray-100 transition cursor-pointer"
               >
                 Next
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* FLOATING ACTION BAR FOR MULTI-SELECTION */}
+      {selectedIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-slate-900 text-white px-5 py-3 rounded-2xl shadow-2xl z-40 flex items-center gap-4 animate-in fade-in slide-in-from-bottom-4 border border-slate-700">
+          <span className="text-xs font-bold text-slate-300">
+            {selectedIds.length} Selected
+          </span>
+
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => handleBulkGateAction("exit")}
+              disabled={bulkProcessing}
+              className="bg-[#6d0f16] hover:bg-[#530b11] text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              Mark Exit 🚪
+            </button>
+            <button
+              onClick={() => handleBulkGateAction("enter")}
+              disabled={bulkProcessing}
+              className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold transition shadow-xs cursor-pointer disabled:opacity-50"
+            >
+              Mark Return 🏠
+            </button>
+            <button
+              onClick={() => setSelectedIds([])}
+              className="text-xs text-slate-400 hover:text-white underline ml-1 cursor-pointer"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}
@@ -509,13 +625,9 @@ export default function GuardDashboard() {
 
 function Detail({ label, value }) {
   return (
-    <div className="bg-gray-50/80 border border-gray-100 rounded-xl p-2">
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
-        {label}
-      </p>
-      <p className="font-semibold text-gray-800 truncate mt-0.5">
-        {value || "-"}
-      </p>
+    <div className="bg-gray-50 border border-gray-100 rounded-lg p-1.5">
+      <p className="text-[9px] font-bold uppercase text-gray-400">{label}</p>
+      <p className="font-semibold text-gray-800 truncate mt-0.5">{value || "-"}</p>
     </div>
   );
-}
+}   
