@@ -1,17 +1,37 @@
+import { useState, useEffect } from 'react';
 import AllocationLayout from '../layouts/AllocationLayout';
-import { useBatchCountdown } from '../hooks/useBatchCountdown';
-
-const SUBMITTED_PREFS = [
-  { rank: 1, roomId: 'C-302', type: '4-Seater' },
-  { rank: 2, roomId: 'B-118', type: '2-Seater' },
-  { rank: 3, roomId: 'D-414', type: '4-Seater' },
-];
+import { useRoundState } from '../hooks/useRoundState';
+import { useCountdown } from '../hooks/useCountdown';
+import { useActiveBatch } from '../hooks/useActiveBatch';
 
 export default function SelectionLockedPage() {
-  const { display } = useBatchCountdown(734); // ~12 mins until results
+  const userStr = localStorage.getItem('user');
+  const user = userStr ? JSON.parse(userStr) : null;
+  const studentId = user ? user.id : null;
+
+  const { data: state } = useActiveBatch(studentId);
+  const roundState = useRoundState(state);
+  
+  // 1. Timer logic synced with waiting room
+  const roundTimer = useCountdown(roundState?.roundEndsAt ?? null);
+
+  // 2. Load submitted preferences dynamically
+  const [submittedPrefs, setSubmittedPrefs] = useState([]);
+  useEffect(() => {
+    if (state?.groupId) {
+      try {
+        const saved = localStorage.getItem(`submitted_prefs_${state.groupId}`);
+        if (saved) {
+          setSubmittedPrefs(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error('Failed to parse submitted prefs', e);
+      }
+    }
+  }, [state?.groupId]);
 
   return (
-    <AllocationLayout phase="Selection Locked" batch="Batch #12">
+    <AllocationLayout phase="Selection Locked" batch={`Batch #${state?.batchNumber || 'TBD'}`}>
       <div className="max-w-2xl mx-auto flex flex-col gap-5 pt-4">
 
         {/* Success header */}
@@ -30,13 +50,17 @@ export default function SelectionLockedPage() {
           <div className="px-4 py-3 border-b border-border">
             <p className="text-[10.5px] font-bold tracking-[0.1em] text-crimson">YOUR SUBMITTED PREFERENCES</p>
           </div>
-          {SUBMITTED_PREFS.map(p => (
+          {submittedPrefs.length > 0 ? submittedPrefs.map(p => (
             <div key={p.rank} className="flex items-center gap-3 px-4 py-3.5 border-b border-border last:border-0 bg-canvas">
               <span className="w-6 h-6 rounded-full bg-crimson text-white text-[11px] font-black flex items-center justify-center shrink-0">{p.rank}</span>
               <span className="text-[13px] font-bold text-text-primary flex-1">{p.roomId}</span>
               <span className="text-[11px] text-text-muted">{p.type}</span>
             </div>
-          ))}
+          )) : (
+            <div className="p-5 text-center text-[12px] text-text-muted font-bold">
+              The Group Leader has successfully submitted preferences for your squad.
+            </div>
+          )}
         </div>
 
         {/* Processing state */}
@@ -54,7 +78,7 @@ export default function SelectionLockedPage() {
           </div>
           <div className="text-right shrink-0">
             <p className="text-[10px] font-bold tracking-[0.08em] text-text-muted">RESULTS IN</p>
-            <p className="text-[22px] font-black text-crimson tabular-nums">{display}</p>
+            <p className="text-[22px] font-black text-crimson tabular-nums">{roundTimer}</p>
           </div>
         </div>
 

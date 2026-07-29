@@ -93,12 +93,12 @@ export const submitPreferences = async (payload) => {
 };
 
 // DEV ONLY
-export const triggerDevPhase = async (hostelId, targetPhase) => {
-  return await client.post('/allocation/dev/advance-phase', { hostelId, targetPhase });
+export const triggerDevPhase = async (eventId, targetPhase) => {
+  return await client.post('/allocation/dev/advance-phase', { eventId, targetPhase });
 };
 
-export const triggerResetPhase = async (hostelId) => {
-  return await client.post('/allocation/dev/reset-phase', { hostelId });
+export const triggerResetPhase = async (eventId) => {
+  return await client.post('/allocation/dev/reset-phase', { eventId });
 };
 
 export const getBatches = async (hostelId) => {

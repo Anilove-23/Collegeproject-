@@ -8,17 +8,22 @@
  *   • Events status table
  */
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { queryClient } from '../lib/queryClient.js';
 import { adminKeys } from '../hooks/queryKeys.js';
 import { getEvents, createEvent, updateEventDate } from '../api/admin.api.js';
-import AllocationLayout from '../layouts/AllocationLayout';
 import RankUpdatePanel from '../components/admin/RankUpdatePanel';
 import RoomPoolConfigurator from '../components/admin/RoomPoolConfigurator';
 
 const TARGET_YEARS = [1, 2, 3, 4, 5];
 
 export default function AllocationAdminPage() {
+    const navigate = useNavigate();
+    const userStr = localStorage.getItem('user');
+    const user = userStr ? JSON.parse(userStr) : null;
+    const assignedHostel = user?.hostel || 'Unknown Hostel';
+
     const [selectedTargetYear, setSelectedTargetYear] = useState(2); // Default to 2nd Year
     const [allocationDateInput, setAllocationDateInput] = useState('');
     const [poolSavedMsg, setPoolSavedMsg] = useState('');
@@ -85,8 +90,31 @@ export default function AllocationAdminPage() {
     };
 
     return (
-        <AllocationLayout phase="Admin" batch="Allocation Control">
-            <div className="max-w-5xl mx-auto flex flex-col gap-5 pt-4">
+        <div className="flex flex-col min-h-screen bg-canvas overflow-y-auto">
+            {/* WARDEN DASHBOARD NAVBAR */}
+            <header className="bg-[#6d0f16] text-white px-8 py-4 shadow-md flex justify-between items-center flex-wrap gap-4">
+                <div>
+                    <h1 className="text-xl font-extrabold tracking-tight">
+                        Warden Dashboard
+                    </h1>
+                    <p className="text-xs text-white/70 flex items-center gap-1.5 mt-0.5">
+                        <span>📍 Assigned Hostel:</span>
+                        <strong className="text-white bg-white/20 px-2 py-0.5 rounded-md font-semibold">
+                            {assignedHostel}
+                        </strong>
+                    </p>
+                </div>
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={() => navigate('/wardenhostel')}
+                        className="bg-white/10 hover:bg-white text-white hover:text-[#6d0f16] px-4 py-2 rounded-xl text-xs font-semibold transition border border-white/20 shadow-xs cursor-pointer"
+                    >
+                        Back to Dashboard
+                    </button>
+                </div>
+            </header>
+
+            <div className="max-w-5xl mx-auto flex flex-col gap-5 p-8 w-full">
 
                 {/* Header */}
                 <div className="bg-card border border-border rounded-xl shadow-sm p-5">
@@ -233,6 +261,6 @@ export default function AllocationAdminPage() {
                     )}
                 </div>
             </div>
-        </AllocationLayout>
+        </div>
     );
 }

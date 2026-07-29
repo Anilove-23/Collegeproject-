@@ -11,7 +11,8 @@ export default function RoomGridPage() {
   const studentId = user ? user.id : null;
 
   const { data: allocState, isLoading: stateLoading } = useActiveBatch(studentId);
-  const { data: rooms = [], isLoading: loading } = useRooms(allocState?.hostelId ?? null, studentId);
+  const eventId = allocState?.eventId ?? null;
+  const { data: rooms = [], isLoading: loading } = useRooms(eventId, studentId);
 
   const [filters, setFilters] = useState({
     type: 'All Types',
@@ -20,7 +21,7 @@ export default function RoomGridPage() {
     search: '',
   });
 
-  const { data: filtersData } = useRoomFilters(allocState?.hostelId ?? null);
+  const { data: filtersData } = useRoomFilters(eventId);
   const availableTypes = filtersData?.availableTypes || [];
   const availableBlocks = filtersData?.availableBlocks || [];
 
@@ -44,7 +45,7 @@ export default function RoomGridPage() {
     return groups;
   }, [filteredRooms]);
 
-  if (stateLoading || (allocState?.hostelId && loading)) {
+  if (stateLoading || (eventId && loading)) {
     return (
       <AllocationLayout phase="Loading..." batch="">
         <div className="flex justify-center items-center h-64 text-text-muted">Loading room map...</div>
@@ -52,10 +53,10 @@ export default function RoomGridPage() {
     );
   }
 
-  if (!allocState?.hostelId) {
+  if (!eventId) {
     return (
       <AllocationLayout phase="Unknown" batch="">
-        <div className="flex justify-center items-center h-64 text-crimson">Hostel ID not found.</div>
+        <div className="flex justify-center items-center h-64 text-crimson">Allocation Event ID not found.</div>
       </AllocationLayout>
     );
   }
