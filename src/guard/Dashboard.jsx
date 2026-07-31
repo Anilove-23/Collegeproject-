@@ -193,28 +193,110 @@ export default function GuardDashboard() {
     }
   }
 
-  /* ================= BATCH GATE ACTION ================= */
-  async function handleBulkGateAction(actionType) {
-    if (!selectedIds.length) return;
-    try {
-      setBulkProcessing(true);
-      const targets = data.filter((o) => {
-        const id = o.id || o.outpass_id;
-        const isCurrentlyIn = o.std_status === "In" || !o.std_status;
-        const recordTargetAction = isCurrentlyIn ? "exit" : "enter";
-        return selectedIds.includes(id) && recordTargetAction === actionType;
-      });
+ /* ================= BATCH GATE ACTION (SINGLE API CALL) ================= */
+async function handleBulkGateAction(actionType) {
+  if (!selectedIds.length) return;
 
-      for (const record of targets) {
-        await handleGateAction(record, null);
+  try {
+    setBulkProcessing(true);
+    setError("");
+
+    await apiFetch("/api/students/bulk-record-entry", {
+      method: "POST",
+      body: JSON.stringify({
+        outpass_ids: selectedIds,
+        action: actionType,
+        gate: "Main Gate",
+      }),
+    });
+
+    const nowTimestamp = new Date().toISOString();
+
+    // Snapshot selected records from current data before mutating state,
+    // so audit logs still have name/roll/hostel/room info.
+    const selectedRecords = data.filter((item) =>
+      selectedIds.includes(item.id || item.outpass_id)
+    );
+
+    const existingLogs = (() => {
+      try {
+        return JSON.parse(localStorage.getItem(LOCAL_LOGS_KEY)) || [];
+      } catch {
+        return [];
       }
-      setSelectedIds([]);
-    } catch (err) {
-      console.error("Bulk processing error", err);
-    } finally {
-      setBulkProcessing(false);
+    })();
+
+    // Same audit log shape/defaults as the single-action handler
+    const newAuditLogs = selectedRecords.map((record, idx) => {
+      const targetId = record.id || record.outpass_id;
+      const currentRemark =
+        remarks[targetId] ||
+        (actionType === "exit"
+          ? "Gate exit recorded"
+          : "Returned safely to campus");
+
+      return {
+        id: Date.now() + idx,
+        studentName: record.name,
+        rollNo: record.roll_no,
+        action: actionType === "exit" ? "EXIT" : "RETURNED",
+        time: nowTimestamp,
+        remark: currentRemark,
+        hostel: record.hostel,
+        room: record.room,
+        outpassType: record.outpass_type || "Local",
+      };
+    });
+
+    localStorage.setItem(
+      LOCAL_LOGS_KEY,
+      JSON.stringify([...newAuditLogs, ...existingLogs])
+    );
+
+    if (actionType === "enter") {
+      // Remove processed students from the active list
+      setData((prev) =>
+        prev.filter(
+          (item) => !selectedIds.includes(item.id || item.outpass_id)
+        )
+      );
+
+      // Add to completedIds and persist to localStorage
+      setCompletedIds((prev) => {
+        const updated = [...prev, ...selectedIds];
+        localStorage.setItem(COMPLETED_OUTPASSES_KEY, JSON.stringify(updated));
+        return updated;
+      });
+    } else {
+      // Mark processed students as "Out"
+      setData((prev) =>
+        prev.map((item) => {
+          const itemId = item.id || item.outpass_id;
+          if (selectedIds.includes(itemId)) {
+            return { ...item, std_status: "Out" };
+          }
+          return item;
+        })
+      );
     }
+
+    // Clear temporary remarks for processed students
+    setRemarks((prev) => {
+      const updated = { ...prev };
+      selectedIds.forEach((id) => {
+        delete updated[id];
+      });
+      return updated;
+    });
+
+    setSelectedIds([]);
+  } catch (err) {
+    console.error("Bulk processing error", err);
+    setError(err.message || `Failed to bulk ${actionType}`);
+  } finally {
+    setBulkProcessing(false);
   }
+}
 
   /* ================= FILTER & PAGINATE ================= */
   const filtered = useMemo(() => {
