@@ -24,6 +24,11 @@ interface OutpassData {
   date_created: string;
 }
 
+interface StudentHistory {
+  profile: any;
+  outpasses: OutpassData[];
+}
+
 function Warden() {
   const navigate = useNavigate();
   const userString = localStorage.getItem('user');
@@ -37,6 +42,40 @@ function Warden() {
   const [selectedHostel, setSelectedHostel] = useState<string>('All');
   const [searchQuery, setSearchQuery] = useState<string>('');
   const [selectedStatus, setSelectedStatus] = useState<string>('All');
+
+  // Modal State
+  const [isModalOpen, setIsModalOpen] = useState<boolean>(false);
+  const [studentHistory, setStudentHistory] = useState<StudentHistory | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState<boolean>(false);
+
+  // Fetch specific student history
+  const fetchStudentHistory = async (studentId: number) => {
+    setLoadingHistory(true);
+    setIsModalOpen(true);
+    try {
+      // NOTE: Using token if needed, or directly fetch if auth is optional (as in outpasses)
+      const token = localStorage.getItem("token");
+      const headers: any = { "Content-Type": "application/json" };
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`http://localhost:5000/api/students/${studentId}/history`, {
+        headers,
+      });
+      const data = await res.json();
+      if (data.success) {
+        setStudentHistory(data.data);
+      } else {
+        alert("Failed to load student history: " + data.message);
+        setIsModalOpen(false);
+      }
+    } catch (err) {
+      console.error(err);
+      alert("Error loading student history.");
+      setIsModalOpen(false);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   // --- Fetch All Outpasses WITHOUT TOKEN ---
   useEffect(() => {
@@ -208,7 +247,12 @@ function Warden() {
                 {/* Left Block */}
                 <div className="md:w-1/3 border-b md:border-b-0 md:border-r border-gray-100 pb-4 md:pb-0 pr-0 md:pr-6">
                   <div className="flex items-center gap-2 mb-2">
-                    <h3 className="text-xl font-bold text-[#5b0e0e]">{pass.student_name}</h3>
+                    <h3 
+                      className="text-xl font-bold text-[#5b0e0e] cursor-pointer hover:underline"
+                      onClick={() => fetchStudentHistory(pass.student_id)}
+                    >
+                      {pass.student_name}
+                    </h3>
                   </div>
                   
                   <div className="space-y-1 text-sm text-gray-600">
@@ -274,6 +318,113 @@ function Warden() {
         )}
 
       </div>
+
+      {/* Student History Modal */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50">
+              <h2 className="text-2xl font-bold text-[#5b0e0e]">Student History</h2>
+              <button onClick={() => setIsModalOpen(false)} className="text-gray-500 hover:text-red-500 font-bold text-xl">
+                ✕
+              </button>
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-6">
+              {loadingHistory ? (
+                <div className="text-center py-10 font-medium text-gray-500">Loading student details...</div>
+              ) : studentHistory ? (
+                <div className="space-y-8">
+                  {/* Profile Section */}
+                  <div className="bg-gray-50 rounded-lg p-5 border border-gray-200">
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Profile Information</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Name</span>
+                        <span className="font-bold">{studentHistory.profile.name}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Roll No</span>
+                        <span className="font-bold">{studentHistory.profile.roll_no}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Phone</span>
+                        <span className="font-bold">{studentHistory.profile.phone || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Email</span>
+                        <span className="font-bold break-words">{studentHistory.profile.email}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Hostel</span>
+                        <span className="font-bold">{studentHistory.profile.hostel}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Room</span>
+                        <span className="font-bold">{studentHistory.profile.room || 'N/A'}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Department</span>
+                        <span className="font-bold">{studentHistory.profile.department}</span>
+                      </div>
+                      <div>
+                        <span className="block text-gray-500 text-xs uppercase">Degree</span>
+                        <span className="font-bold">{studentHistory.profile.degree_type || 'N/A'}</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Outpasses Section */}
+                  <div>
+                    <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Outpass History ({studentHistory.outpasses.length})</h3>
+                    {studentHistory.outpasses.length > 0 ? (
+                      <div className="space-y-3">
+                        {studentHistory.outpasses.map((op: any) => (
+                          <div key={op.id} className="border border-gray-200 rounded-lg p-4 bg-white flex flex-col md:flex-row justify-between items-start gap-4">
+                            <div className="flex-1">
+                              <div className="flex gap-2 items-center mb-1">
+                                <span className="text-xs px-2 py-1 bg-gray-100 border border-gray-200 rounded font-bold uppercase text-gray-600">
+                                  {op.outpass_type}
+                                </span>
+                                <span className={`text-xs px-2 py-1 rounded font-bold uppercase border ${
+                                  op.outp_status === 'Approved' ? 'text-green-600 border-green-200 bg-green-50' :
+                                  op.outp_status === 'Rejected' ? 'text-red-600 border-red-200 bg-red-50' :
+                                  'text-yellow-600 border-yellow-200 bg-yellow-50'
+                                }`}>
+                                  {op.outp_status}
+                                </span>
+                                {op.is_emergency && <span className="text-xs px-2 py-1 bg-red-100 text-red-700 font-bold uppercase rounded border border-red-200">Emergency</span>}
+                              </div>
+                              <p className="text-sm text-gray-800"><span className="font-semibold text-gray-500">Destination:</span> {op.destination || op.place_of_visit}</p>
+                              <p className="text-sm text-gray-600 italic">"{op.purpose || op.reason}"</p>
+                            </div>
+                            <div className="text-right text-xs text-gray-500 space-y-1 bg-gray-50 p-2 rounded border border-gray-100">
+                              <p>Applied: <span className="font-medium text-gray-700">{new Date(op.created_at || op.date_created).toLocaleString()}</span></p>
+                              <p>From: <span className="font-medium text-gray-700">{new Date(op.departure_datetime || op.date_from).toLocaleString()}</span></p>
+                              <p>To: <span className="font-medium text-gray-700">{new Date(op.arrival_datetime || op.date_to).toLocaleString()}</span></p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-500 text-sm">No outpasses generated by this student yet.</p>
+                    )}
+                  </div>
+                </div>
+              ) : null}
+            </div>
+            
+            <div className="p-4 border-t border-gray-200 bg-gray-50 text-right">
+              <button 
+                onClick={() => setIsModalOpen(false)}
+                className="bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold py-2 px-6 rounded transition-colors"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

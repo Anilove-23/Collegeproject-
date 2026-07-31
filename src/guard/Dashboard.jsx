@@ -465,7 +465,7 @@ export default function GuardDashboard() {
                           {o.name}
                         </h2>
                         <p className="text-[10px] font-semibold text-gray-400 truncate">
-                          {o.roll_no || "No Roll"} • {o.hostel} ({o.room || "-"})
+                          {o.roll_no || "No Roll"} • {o.degree_type || "No Degree"} • {o.hostel} ({o.room || "-"})
                         </p>
                       </div>
                     </div>

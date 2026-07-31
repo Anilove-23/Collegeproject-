@@ -1,203 +1,183 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 
-function ComplaintForm() {
-  const navigate = useNavigate();
-  
-  const [formData, setFormData] = useState({
-    title: '',
-    type: '',
-    description: '',
-    priority: 'medium'
-  });
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
+const COMPLAINT_TYPES = [
+  { value: "cleaning", label: "Cleaning" },
+  { value: "electricity", label: "Electricity" },
+  { value: "plumbing", label: "Plumbing" },
+  { value: "internet", label: "Internet/Wi-Fi" },
+  { value: "other", label: "Other" }
+];
 
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: value
-    }));
-  };
+const INITIAL_FORM = {
+  title: "",
+  description: "",
+  type: "cleaning"
+};
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-    
-   
+export default function ComplaintForm({ onSuccess, onCancel }) {
+  const [form, setForm] = useState(INITIAL_FORM);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+
+  function updateField(field, value) {
+    setForm((prev) => ({ ...prev, [field]: value }));
+  }
+
+  function validate() {
+    if (!form.title.trim()) {
+      setError("Please enter a title");
+      return false;
+    }
+    if (!form.description.trim()) {
+      setError("Please provide a description");
+      return false;
+    }
+    setError("");
+    return true;
+  }
+
+  async function submit(e) {
+    if (e) e.preventDefault();
+    if (!validate()) return;
+
     let token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-
-
     
-
-    if (!token || !userStr) {
-      navigate("/login");
-      return;
+    if (token && token.startsWith('"') && token.endsWith('"')) {
+      token = token.slice(1, -1);
     }
-
-    const user = JSON.parse(userStr);
+    const user = userStr ? JSON.parse(userStr) : {};
 
     try {
-      const response = await fetch('http://localhost:5000/complaint/postcomplaint', {
+      setLoading(true);
+      setError("");
+
+      const response = await fetch('http://localhost:5000/complaint/add', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
-          'role': user.role || 'student' 
+          'role': user.role || 'student'
         },
         body: JSON.stringify({
-          title: formData.title,
-          type: formData.type,
-          description: formData.description,
-          hostel: user.hostel, 
-        })
+          title: form.title,
+          description: form.description,
+          type: form.type
+        }),
       });
 
-      const data = await response.json();
-
       if (!response.ok) {
-        throw new Error(data.message || 'Failed to submit complaint');
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to submit complaint');
       }
 
-    
-      navigate('/complaint');
-      
+      setForm(INITIAL_FORM);
+      if (onSuccess) onSuccess();
+
     } catch (err) {
       console.error(err);
       setError(err.message);
     } finally {
-      setIsSubmitting(false);
+      setLoading(false);
     }
-  };
-
-  const inputStyles = "w-full border border-gray-300 p-3.5 rounded-lg mt-1.5 outline-none focus:border-[#5b0e0e] focus:ring-1 focus:ring-[#5b0e0e] transition-all text-gray-800 bg-white shadow-sm hover:border-gray-400 disabled:opacity-50";
-  const labelStyles = "block text-xs font-bold text-gray-500 uppercase tracking-wider";
+  }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-4">
-      
-      <div className="w-full max-w-xl bg-white rounded-2xl shadow-xl border border-gray-100 p-8 md:p-10 relative">
-        
-        <button 
-          onClick={() => navigate('/complaint')}
-          className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-full bg-gray-50 text-gray-400 hover:bg-red-50 hover:text-red-500 transition-colors text-xl font-bold"
-          title="Close"
-          disabled={isSubmitting}
-        >
-          ✕
-        </button>
+    <div className="min-h-[80vh] flex items-center justify-center px-4 py-6 sm:py-10">
+      <div className="w-full max-w-3xl bg-white p-6 sm:p-8 rounded-2xl sm:rounded-3xl border border-gray-100 shadow-sm">
+        {/* ================= HEADER ================= */}
+        <div className="text-center mb-6 sm:mb-8">
+          <h2 className="text-2xl sm:text-4xl font-bold text-[#6d0f16]">
+            Raise Complaint
+          </h2>
+          <p className="text-gray-500 mt-2 text-sm sm:text-base">
+            Report a hostel issue to the administration
+          </p>
+        </div>
 
-        <form onSubmit={handleSubmit} className="space-y-6">
-          
-          <div className="text-center mb-6 border-b border-gray-100 pb-6">
-            <h1 className="text-3xl font-bold text-[#5b0e0e]">
-              Raise a Complaint
-            </h1>
-            <p className="text-gray-500 mt-2 text-sm font-medium">
-              Fill out the details below to notify the hostel administration.
-            </p>
+        {/* ================= ERROR ================= */}
+        {error && (
+          <div
+            role="alert"
+            className="mb-5 bg-red-50 border border-red-200 text-red-600 p-4 rounded-2xl text-sm"
+          >
+            {error}
           </div>
+        )}
 
-          {error && (
-            <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm font-semibold border border-red-100 text-center">
-              {error}
-            </div>
-          )}
-
+        <form onSubmit={submit} className="space-y-6">
+          {/* ================= TYPE ================= */}
           <div>
-            <label className={labelStyles}>
-              Complaint Title <span className="text-red-500">*</span>
-            </label>
-            <input
-              required
-              type="text"
-              name="title"
-              placeholder="e.g. Broken window latch in Room 102"
-              value={formData.title}
-              onChange={handleChange}
-              className={inputStyles}
-              maxLength="100"
-              disabled={isSubmitting}
-            />
-          </div>
-
-          <div>
-            <label className={labelStyles}>
-              Complaint Type <span className="text-red-500">*</span>
+            <label htmlFor="complaint-type" className="block text-sm font-medium text-gray-700">
+              Category
             </label>
             <select
-              required
-              name="type"
-              value={formData.type}
-              onChange={handleChange}
-              className={inputStyles}
-              disabled={isSubmitting}
+              id="complaint-type"
+              className="w-full border rounded-2xl px-4 py-3 mt-2 focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:border-transparent bg-white"
+              value={form.type}
+              onChange={(e) => updateField("type", e.target.value)}
+              disabled={loading}
             >
-              <option value="" disabled>Select Type</option>
-              <option value="Electrical">Electrical</option>
-              <option value="Plumbing">Plumbing</option>
-              <option value="Carpentry">Carpentry</option>
-              <option value="Internet/WiFi">Internet / Wi-Fi</option>
-              <option value="Cleanliness">Cleanliness</option>
-              <option value="Mess/Food">Mess / Food</option>
-              <option value="Other">Other</option>
+              {COMPLAINT_TYPES.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </div>
 
+          {/* ================= TITLE ================= */}
           <div>
-            <label className={labelStyles}>
-              Detailed Description <span className="text-red-500">*</span>
+            <label htmlFor="title" className="block text-sm font-medium text-gray-700">
+              Title
             </label>
-            <textarea
-              required
-              name="description"
-              placeholder="Provide specific details about the issue so we can fix it faster..."
-              value={formData.description}
-              onChange={handleChange}
-              className={inputStyles + " resize-none h-32"}
-              maxLength="500"
-              disabled={isSubmitting}
+            <input
+              id="title"
+              type="text"
+              value={form.title}
+              onChange={(e) => updateField("title", e.target.value)}
+              placeholder="E.g., Broken fan in Room 204"
+              className="mt-2 w-full border rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:border-transparent"
+              disabled={loading}
             />
-            <div className="flex justify-end mt-1.5">
-              <span className={`text-xs font-medium ${formData.description.length >= 480 ? 'text-red-500' : 'text-gray-400'}`}>
-                {formData.description.length} / 500
-              </span>
-            </div>
           </div>
 
-          {/* Action Buttons */}
-          <div className="flex gap-4 mt-8 pt-2">
-            <button 
-              type="button" 
-              onClick={() => navigate('/complaint')}
-              disabled={isSubmitting}
-              className="w-1/3 bg-gray-50 hover:bg-gray-100 border border-gray-200 text-gray-700 py-3.5 rounded-lg font-bold transition-colors duration-200 disabled:opacity-50"
+          {/* ================= DESCRIPTION ================= */}
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700">
+              Description
+            </label>
+            <textarea
+              id="description"
+              value={form.description}
+              onChange={(e) => updateField("description", e.target.value)}
+              placeholder="Please provide details about the issue..."
+              rows={5}
+              className="mt-2 w-full border rounded-2xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:border-transparent resize-none"
+              disabled={loading}
+            />
+          </div>
+
+          {/* ================= BUTTONS ================= */}
+          <div className="flex flex-col sm:flex-row gap-4 pt-4">
+            <button
+              type="button"
+              onClick={onCancel}
+              disabled={loading}
+              className="w-full sm:w-1/3 px-5 py-4 border border-gray-200 rounded-2xl hover:bg-gray-100 active:bg-gray-200 transition-colors duration-150 font-medium disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:ring-offset-2"
             >
               Cancel
             </button>
-            <button 
-              type="submit" 
-              disabled={isSubmitting}
-              className="w-2/3 bg-[#5b0e0e] hover:bg-[#741616] text-white py-3.5 rounded-lg font-bold transition-colors duration-200 shadow-md shadow-[#5b0e0e]/20 flex items-center justify-center gap-2 disabled:opacity-70"
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full sm:w-2/3 bg-[#6d0f16] hover:bg-[#5a0c12] active:bg-[#4a0a0f] text-white py-4 rounded-2xl font-semibold transition-colors duration-150 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:ring-offset-2"
             >
-              {isSubmitting ? (
-                <>
-                  <span className="animate-spin text-xl leading-none">↻</span> Submitting...
-                </>
-              ) : (
-                "Submit Complaint"
-              )}
+              {loading ? "Submitting..." : "Submit Complaint"}
             </button>
           </div>
-          
         </form>
       </div>
     </div>
   );
 }
-
-export default ComplaintForm;

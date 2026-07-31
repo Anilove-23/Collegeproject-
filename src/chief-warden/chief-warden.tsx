@@ -14,6 +14,7 @@ interface Hostel {
 
 interface Outpass {
   id: string;
+  student_id: string;
   name: string;
   roll_no: string;
   phone: string;
@@ -34,6 +35,7 @@ interface Complaint {
   description: string;
   hostel: string;
   status: string;
+  student_id?: string;
   student_name?: string;
   student_roll_no?: string;
   student_phone?: string;
@@ -43,6 +45,7 @@ interface Complaint {
 
 interface LateLog {
   id: string;
+  student_id: string;
   name: string;
   roll_no: string;
   department: string;
@@ -54,6 +57,13 @@ interface LateLog {
   std_status?: string;
   created_at?: string;
   outpass_type?: string;
+}
+
+interface StudentHistory {
+  profile: any;
+  outpasses: Outpass[];
+  visit_logs: any[];
+  complaints: Complaint[];
 }
 
 /* ================= COMPONENT ================= */
@@ -85,6 +95,39 @@ function Warden() {
   /* ================= PAGINATION STATE ================= */
   const [page, setPage] = useState(1);
   const limit = 8; // Items per page
+
+  /* ================= STUDENT HISTORY MODAL STATE ================= */
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [studentHistory, setStudentHistory] = useState<StudentHistory | null>(null);
+  const [loadingHistory, setLoadingHistory] = useState(false);
+  const [activeModalTab, setActiveModalTab] = useState<"profile" | "outpasses" | "logs" | "complaints">("profile");
+
+  // Fetch specific student history
+  const fetchStudentHistory = async (studentId: string | number) => {
+    if (!studentId) return;
+    setLoadingHistory(true);
+    setIsModalOpen(true);
+    setActiveModalTab("profile"); // default tab
+    try {
+      const response: any = await apiFetch(`/api/students/${studentId}/history`);
+      // apiFetch returns the raw 'data' directly or throws an error.
+      // Wait, let's check how other apiFetch calls handle it.
+      // Usually response is either the data array/object, or response.data.
+      const data = response?.data || response;
+      if (data) {
+        setStudentHistory(data);
+      } else {
+        alert("Failed to load student history: Invalid response format");
+        setIsModalOpen(false);
+      }
+    } catch (err: any) {
+      console.error(err);
+      alert("Failed to load student history: " + (err.message || "Unknown error"));
+      setIsModalOpen(false);
+    } finally {
+      setLoadingHistory(false);
+    }
+  };
 
   /* ================= FETCH ================= */
 
@@ -761,7 +804,10 @@ function Warden() {
                         >
                           <td className="px-6 py-4">
                             <div>
-                              <h3 className="font-bold text-gray-900">
+                              <h3 
+                                className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                                onClick={() => fetchStudentHistory(pass.student_id || '')}
+                              >
                                 {pass.name}
                               </h3>
                               <p className="text-xs text-gray-400">
@@ -851,7 +897,10 @@ function Warden() {
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">
+                            <h3 
+                              className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                              onClick={() => fetchStudentHistory(comp.student_id || '')}
+                            >
                               {comp.student_name || "-"}
                             </h3>
                             <p className="text-xs text-gray-400">
@@ -948,7 +997,10 @@ function Warden() {
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">
+                            <h3 
+                              className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                              onClick={() => fetchStudentHistory(log.student_id || '')}
+                            >
                               {log.name || "-"}
                             </h3>
                             <p className="text-xs text-gray-400">
@@ -1042,6 +1094,264 @@ function Warden() {
           </div>
         )}
       </div>
+
+      {/* ================= COMPREHENSIVE STUDENT HISTORY MODAL ================= */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
+            
+            {/* MODAL HEADER */}
+            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+              <div>
+                <h2 className="text-2xl font-bold text-[#6d0f16] flex items-center gap-2">
+                  Student 360° History
+                </h2>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1">
+                  Complete view of outpasses, gate logs, and complaints
+                </p>
+              </div>
+              <button 
+                onClick={() => setIsModalOpen(false)} 
+                className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 hover:bg-red-100 hover:text-red-600 transition-colors cursor-pointer text-gray-600 font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            {/* MODAL BODY */}
+            <div className="flex-1 flex flex-col overflow-hidden">
+              {loadingHistory ? (
+                <div className="flex-1 flex items-center justify-center flex-col gap-4">
+                  <div className="w-10 h-10 border-4 border-gray-200 border-t-[#6d0f16] rounded-full animate-spin"></div>
+                  <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Fetching data across tables...</p>
+                </div>
+              ) : studentHistory ? (
+                <>
+                  {/* MODAL TABS */}
+                  <div className="bg-white border-b border-gray-200 px-6 pt-4 flex gap-6 overflow-x-auto">
+                    <button
+                      onClick={() => setActiveModalTab("profile")}
+                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'profile' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                      Profile & Academic
+                    </button>
+                    <button
+                      onClick={() => setActiveModalTab("outpasses")}
+                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'outpasses' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                      Outpass Requests ({studentHistory.outpasses?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setActiveModalTab("logs")}
+                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'logs' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                      Physical Gate Logs ({studentHistory.visit_logs?.length || 0})
+                    </button>
+                    <button
+                      onClick={() => setActiveModalTab("complaints")}
+                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'complaints' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
+                    >
+                      Complaints ({studentHistory.complaints?.length || 0})
+                    </button>
+                  </div>
+
+                  {/* MODAL CONTENT AREA */}
+                  <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
+                    
+                    {/* TAB: PROFILE */}
+                    {activeModalTab === "profile" && (
+                      <div className="space-y-6 animate-fadeIn">
+                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Primary Information</h3>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
+                            <div>
+                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Full Name</span>
+                              <span className="font-semibold text-lg text-gray-900">{studentHistory.profile.name}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Roll Number</span>
+                              <span className="font-semibold text-lg text-[#6d0f16]">{studentHistory.profile.roll_no}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Phone Number</span>
+                              <span className="font-semibold text-sm text-gray-800">{studentHistory.profile.phone || 'N/A'}</span>
+                            </div>
+                            <div>
+                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Email Address</span>
+                              <span className="font-semibold text-sm text-gray-800 break-all">{studentHistory.profile.email}</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Housing details</h3>
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Hostel</span>
+                                <span className="font-bold text-gray-900">{studentHistory.profile.hostel}</span>
+                              </div>
+                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Room Number</span>
+                                <span className="font-bold text-gray-900">{studentHistory.profile.room || 'Not Assigned'}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
+                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Academic details</h3>
+                            <div className="space-y-4">
+                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Department</span>
+                                <span className="font-bold text-gray-900">{studentHistory.profile.department || 'N/A'}</span>
+                              </div>
+                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
+                                <span className="text-xs font-bold text-gray-500 uppercase">Degree Type</span>
+                                <span className="font-bold text-gray-900">{studentHistory.profile.degree_type || 'N/A'}</span>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* TAB: OUTPASSES */}
+                    {activeModalTab === "outpasses" && (
+                      <div className="animate-fadeIn space-y-4">
+                        {studentHistory.outpasses?.length > 0 ? (
+                          studentHistory.outpasses.map((op: any) => (
+                            <div key={op.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row gap-6">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-gray-100 text-gray-600 rounded">
+                                    {op.outpass_type}
+                                  </span>
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
+                                    op.outp_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' :
+                                    op.outp_status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
+                                    'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {op.outp_status}
+                                  </span>
+                                  {op.is_emergency && <span className="text-[10px] font-bold uppercase px-2 py-1 bg-red-100 text-red-700 rounded border border-red-200">Emergency</span>}
+                                </div>
+                                <h4 className="font-bold text-gray-900 mt-2 mb-1">
+                                  Dest: <span className="font-normal text-gray-700">{op.destination || op.place_of_visit}</span>
+                                </h4>
+                                <p className="text-sm text-gray-500 italic">"{op.purpose || op.reason}"</p>
+                              </div>
+                              <div className="md:w-64 bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2 text-xs">
+                                <div className="flex justify-between">
+                                  <span className="font-bold text-gray-400 uppercase tracking-wider">Applied</span>
+                                  <span className="font-medium text-gray-800">{new Date(op.created_at || op.date_created).toLocaleDateString()}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="font-bold text-gray-400 uppercase tracking-wider">From</span>
+                                  <span className="font-medium text-gray-800">{new Date(op.departure_datetime || op.date_from).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+                                </div>
+                                <div className="flex justify-between">
+                                  <span className="font-bold text-gray-400 uppercase tracking-wider">To</span>
+                                  <span className="font-medium text-gray-800">{new Date(op.arrival_datetime || op.date_to).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
+                                </div>
+                              </div>
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-12 text-gray-400">
+                            <span className="text-4xl block mb-3">🎫</span>
+                            <span className="font-medium">No outpasses generated by this student.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB: LOGS */}
+                    {activeModalTab === "logs" && (
+                      <div className="animate-fadeIn space-y-4">
+                        {studentHistory.visit_logs?.length > 0 ? (
+                          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+                            <table className="w-full text-sm text-left">
+                              <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
+                                <tr>
+                                  <th className="px-6 py-4">Action</th>
+                                  <th className="px-6 py-4">Destination</th>
+                                  <th className="px-6 py-4">Gate</th>
+                                  <th className="px-6 py-4">Exit Time</th>
+                                  <th className="px-6 py-4">Entry Time</th>
+                                  <th className="px-6 py-4">Remarks</th>
+                                </tr>
+                              </thead>
+                              <tbody className="divide-y divide-gray-100">
+                                {studentHistory.visit_logs.map((log: any) => (
+                                  <tr key={log.id} className="hover:bg-gray-50/50">
+                                    <td className="px-6 py-4">
+                                      <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded font-bold text-[10px] uppercase">{log.outpass_type}</span>
+                                    </td>
+                                    <td className="px-6 py-4 font-medium text-gray-800">{log.destination || log.place_of_visit || '-'}</td>
+                                    <td className="px-6 py-4 text-gray-600 font-medium">{log.gate || '-'}</td>
+                                    <td className="px-6 py-4 text-orange-600 font-semibold">
+                                      {log.actual_departure ? new Date(log.actual_departure).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 text-emerald-600 font-semibold">
+                                      {log.actual_arrival ? new Date(log.actual_arrival).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : '-'}
+                                    </td>
+                                    <td className="px-6 py-4 text-gray-500 italic text-xs">{log.remarks || '-'}</td>
+                                  </tr>
+                                ))}
+                              </tbody>
+                            </table>
+                          </div>
+                        ) : (
+                          <div className="text-center py-12 text-gray-400">
+                            <span className="text-4xl block mb-3">🚪</span>
+                            <span className="font-medium">No physical gate movements found.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* TAB: COMPLAINTS */}
+                    {activeModalTab === "complaints" && (
+                      <div className="animate-fadeIn space-y-4">
+                        {studentHistory.complaints?.length > 0 ? (
+                          studentHistory.complaints.map((comp: any) => (
+                            <div key={comp.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row gap-6">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-2 mb-2">
+                                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
+                                    comp.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
+                                  }`}>
+                                    {comp.status}
+                                  </span>
+                                  <span className="text-xs text-gray-400 font-medium">{new Date(comp.date_created).toLocaleDateString()}</span>
+                                </div>
+                                <h4 className="font-bold text-gray-900 text-base">{comp.title}</h4>
+                                <p className="text-sm text-gray-600 mt-2">{comp.description}</p>
+                              </div>
+                              {comp.resolved_description && (
+                                <div className="md:w-1/3 bg-gray-50 rounded-xl p-4 border border-gray-100">
+                                  <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Resolution</span>
+                                  <p className="text-xs text-gray-700">{comp.resolved_description}</p>
+                                </div>
+                              )}
+                            </div>
+                          ))
+                        ) : (
+                          <div className="text-center py-12 text-gray-400">
+                            <span className="text-4xl block mb-3">🗣️</span>
+                            <span className="font-medium">No complaints raised by this student.</span>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                  </div>
+                </>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

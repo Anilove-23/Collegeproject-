@@ -46,6 +46,10 @@ function Signup() {
       department: "",
 
       rollno: "",
+      
+      degree_type: "",
+      
+      academic_year: "",
 
       role: "student",
     });
@@ -149,7 +153,9 @@ function Signup() {
           !formData.hostel ||
           !formData.room ||
           !formData.department ||
-          !formData.rollno
+          !formData.rollno ||
+          !formData.degree_type ||
+          !formData.academic_year
         ) {
 
           setError(
@@ -276,6 +282,12 @@ function Signup() {
 
             rollno:
               formData.rollno,
+              
+            degree_type:
+              formData.degree_type,
+              
+            academic_year:
+              formData.academic_year,
           };
         }
 
@@ -599,6 +611,29 @@ payload = {
                 name="rollno"
                 placeholder="Roll Number"
                 value={formData.rollno}
+                onChange={handleChange}
+                className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
+              />
+              
+              <select
+                name="degree_type"
+                value={formData.degree_type}
+                onChange={handleChange}
+                className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
+              >
+                <option value="">Select Degree Type</option>
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="B.Arch">B.Arch</option>
+                <option value="Ph.D">Ph.D</option>
+                <option value="Dual Degree">Dual Degree</option>
+              </select>
+
+              <input
+                type="text"
+                name="academic_year"
+                placeholder="Academic Year (e.g., 2022-2026)"
+                value={formData.academic_year}
                 onChange={handleChange}
                 className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
               />
