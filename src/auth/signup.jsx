@@ -50,11 +50,17 @@ function Signup() {
       role: "student",
     });
 
+  const [otp, setOtp] = useState("");
+  const [isOtpSent, setIsOtpSent] = useState(false);
+
   const [error, setError] =
     useState("");
 
   const [loading, setLoading] =
-    useState(false);
+  useState(false);
+
+const [acceptedPrivacy, setAcceptedPrivacy] =
+  useState(false);
 
   /* ================= FLAGS ================= */
 
@@ -240,6 +246,46 @@ function Signup() {
 
         return;
       }
+      if (!acceptedPrivacy) {
+
+  setError(
+    "Please accept the Privacy Policy."
+  );
+
+  return;
+}
+
+      // If OTP hasn't been requested yet, request OTP first
+      if (!isOtpSent) {
+        try {
+          setLoading(true);
+          setError("");
+
+          await apiFetch("/api/auth/send-otp", {
+            method: "POST",
+            body: JSON.stringify(formData),
+          });
+
+          setIsOtpSent(true);
+          navigate("/verify-otp", {
+            state: {
+              email: formData.email,
+              role: formData.role,
+            },
+          });
+        } catch (err) {
+          console.error(err);
+          setError(err.message || "Failed to send OTP");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!otp) {
+        setError("Please enter the OTP printed in your terminal");
+        return;
+      }
 
       try {
 
@@ -276,6 +322,8 @@ function Signup() {
 
             rollno:
               formData.rollno,
+            
+            otp: otp,
           };
         }
 
@@ -298,6 +346,8 @@ function Signup() {
 
             hostel:
               formData.hostel,
+            
+            otp: otp,
           };
         }
 
@@ -315,6 +365,8 @@ function Signup() {
               formData.password,
 
             phone: formData.phone,
+            
+            otp: otp,
           }
         }else{
 payload = {
@@ -331,6 +383,8 @@ payload = {
             phone: formData.phone,
             hostel:
               formData.hostel,
+            
+            otp: otp,
           }
           };
 
@@ -526,21 +580,39 @@ payload = {
 
                 </option>
 
-                <option value="CSE">
+                <option value="ARCHITECTURE">
 
-                  Computer Science Engineering
+                  Architecture
 
                 </option>
 
-                <option value="ME">
+                <option value="CHEMICAL ENGINEERING">
 
-                  Mechanical Engineering
+                  Chemical Engineering
 
                 </option>
 
                 <option value="CE">
 
                   Civil Engineering
+
+                </option>
+
+                <option value="CSE">
+
+                  Computer Science Engineering
+
+                </option>
+
+                <option value="DUAL DEGREE CSE">
+
+                  Dual Degree CSE
+
+                </option>
+
+                <option value="DUAL DEGREE ELECTRONICS">
+
+                  Dual Degree Electronics
 
                 </option>
 
@@ -556,15 +628,15 @@ payload = {
 
                 </option>
 
-                <option value="MNC">
-
-                  Mathematics & Computing
-
-                </option>
-
                 <option value="ENGINEERING PHYSICS">
 
                   Engineering Physics
+
+                </option>
+
+                <option value="MNC">
+
+                  Mathematics & Computing
 
                 </option>
 
@@ -574,21 +646,9 @@ payload = {
 
                 </option>
 
-                <option value="ARCHITECTURE">
+                <option value="ME">
 
-                  Architecture
-
-                </option>
-
-                <option value="DUAL DEGREE CSE">
-
-                  Dual Degree CSE
-
-                </option>
-
-                <option value="DUAL DEGREE ELECTRONICS">
-
-                  Dual Degree Electronics
+                  Mechanical Engineering
 
                 </option>
 
@@ -667,17 +727,61 @@ payload = {
             className="w-full border border-gray-300 p-3 rounded-md mb-5 outline-none focus:border-[#5b0e0e]"
           />
 
-          {/* ================= BUTTON ================= */}
+          {/* ================= OTP INPUT ================= */}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
-          >
+          {isOtpSent && (
+            <input
+              type="text"
+              name="otp"
+              placeholder="Enter OTP (Check terminal)"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              className="w-full border border-[#5b0e0e] p-3 rounded-md mb-5 outline-none focus:border-[#5b0e0e]"
+            />
+          )}
+
+          {/* ================= PRIVACY ================= */}
+
+<div className="flex items-start gap-2 mb-5">
+
+  <input
+    id="privacy"
+    type="checkbox"
+    checked={acceptedPrivacy}
+    onChange={(e) =>
+      setAcceptedPrivacy(e.target.checked)
+    }
+    className="mt-1 h-4 w-4 accent-[#5b0e0e]"
+  />
+
+  <label
+    htmlFor="privacy"
+    className="text-sm text-gray-600 leading-5"
+  >
+    I agree to the{" "}
+    <span className="font-semibold text-[#5b0e0e]">
+      Privacy Policy
+    </span>{" "}
+    and Hostel Rules.
+  </label>
+
+</div>
+
+{/* ================= BUTTON ================= */}
+
+<button
+  type="submit"
+  disabled={loading}
+  className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
+>
 
             {loading
-              ? "Creating Account..."
-              : "Create Account"}
+              ? isOtpSent
+                ? "Creating Account..."
+                : "Sending OTP..."
+              : isOtpSent
+              ? "Verify OTP & Create Account"
+              : "Get OTP & Create Account"}
 
           </button>
 

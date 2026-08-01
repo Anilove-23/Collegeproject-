@@ -73,7 +73,15 @@ function Login() {
     useState(false);
 
   /* ================= HANDLE CHANGE ================= */
-
+  
+  const getMachineId = () => {
+  let machineId = localStorage.getItem('GATE_MACHINE_ID');
+  if (!machineId) {
+    machineId = 'GATE_MAC_' + crypto.randomUUID();
+    localStorage.setItem('GATE_MACHINE_ID', machineId);
+  }
+  return machineId;
+};
   const handleChange = (e) => {
 
     setFormData({
@@ -110,27 +118,26 @@ function Login() {
 
         setError("");
 
-        const data =
-          (await apiFetch(
-            "/api/auth/login",
-            {
-              method: "POST",
+       const loginRole = inferRole("student", formData.email);
 
-              body: JSON.stringify({
+const headers = {
+  "Content-Type": "application/json",
+};
 
-                email:
-                  formData.email,
+if (loginRole === "guard") {
+  headers["X-Machine-ID"] = getMachineId();
+}
 
-                password:
-                  formData.password,
-
-                role: inferRole(
-                  "student",
-                  formData.email
-                ),
-              }),
-            }
-          )) || {};
+const data =
+  (await apiFetch("/api/auth/login", {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      email: formData.email,
+      password: formData.password,
+      loginRole,
+    }),
+  })) || {};
 
 if (data?.success && data?.message === "OTP generated") {
   navigate("/verify-otp", { state: { email: formData.email } });
