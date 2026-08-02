@@ -37,9 +37,14 @@ export async function apiFetch(
 
   /* ================= AUTO LOGOUT ================= */
 
+  // Only treat 401/403 as a session expiry if we're NOT on an auth endpoint.
+  // A 401 on /api/auth/login just means wrong credentials — not an expired session.
+  const isAuthEndpoint = endpoint.startsWith("/api/auth/");
+
   if (
-    response.status === 401 ||
-    response.status === 403
+    !isAuthEndpoint &&
+    (response.status === 401 ||
+    response.status === 403)
   ) {
     localStorage.clear();
     window.location.href =
