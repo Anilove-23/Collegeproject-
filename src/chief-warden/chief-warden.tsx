@@ -21,7 +21,6 @@ interface Remark {
 
 interface Outpass {
   id: string;
-  student_id: string;
   name: string;
   roll_no: string;
   phone: string;
@@ -899,6 +898,7 @@ function ChiefWarden() {
       })
       .map((pass: Outpass) => ({
         id: pass.id,
+        student_id: pass.student_id || pass.roll_no,
         name: pass.name,
         roll_no: pass.roll_no,
         department: pass.department,

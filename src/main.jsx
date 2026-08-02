@@ -173,7 +173,7 @@ const router = createBrowserRouter([
   ...parsedAllocationRoutes,
   {
     path: "/warden",
-    element: <WardenAllocationPage />,
+    element: <Warden />,
     errorElement: <ErrorPage />,
   },
   {

@@ -17,9 +17,13 @@ export default function CancelOutpass({
   /* ================= ACTIVE ONLY ================= */
 
   const activeOutpasses = outpasses.filter((o) => {
-    const status = o.outp_status?.toLowerCase();
-    return status === "pending" || status === "approved";
-  });
+  const status = o.outp_status?.toLowerCase();
+
+  return (
+    o.is_active === true &&
+    (status === "pending" || status === "approved")
+  );
+});
 
   /* ================= CANCEL ================= */
 
@@ -35,7 +39,7 @@ export default function CancelOutpass({
         }
       );
 
-      console.log(result);
+      // console.log(result);
 
       /* UPDATE */
 
