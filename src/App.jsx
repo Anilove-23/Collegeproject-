@@ -7,7 +7,7 @@ import {
   Navigate,
 } from "react-router-dom";
 
-import Login from "./auth/Login";
+import Login from "./auth/login";
 
 export default function App() {
 
