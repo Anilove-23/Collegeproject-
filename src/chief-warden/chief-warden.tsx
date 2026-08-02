@@ -21,6 +21,7 @@ interface Remark {
 
 interface Outpass {
   id: string;
+  student_id: string;
   name: string;
   roll_no: string;
   phone: string;
@@ -52,6 +53,7 @@ interface Complaint {
   description: string;
   hostel: string;
   status: string;
+  student_id?: string;
   student_name?: string;
   student_roll_no?: string;
   student_phone?: string;
@@ -61,6 +63,7 @@ interface Complaint {
 
 interface LateLog {
   id: string;
+  student_id: string;
   name: string;
   roll_no: string;
   department: string;
@@ -1623,7 +1626,10 @@ function ChiefWarden() {
                         >
                           <td className="px-6 py-4">
                             <div>
-                              <h3 className="font-bold text-gray-900 flex items-center flex-wrap">
+                              <h3
+                                className="font-bold text-[#6d0f16] cursor-pointer hover:underline flex items-center flex-wrap"
+                                onClick={() => openHistoryModal(pass)}
+                              >
                                 <HighlightText text={pass.name} query={search} />
                                 {isEmergency && <EmergencyBadge />}
                               </h3>
@@ -1736,7 +1742,26 @@ function ChiefWarden() {
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">
+                            <h3
+                              className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                              onClick={() =>
+                                comp.student_id &&
+                                openHistoryModal({
+                                  id: "",
+                                  student_id: comp.student_id,
+                                  name: comp.student_name || "",
+                                  roll_no: comp.student_roll_no || "",
+                                  phone: "",
+                                  department: comp.student_department || "",
+                                  hostel: comp.hostel,
+                                  place_of_visit: "",
+                                  outpass_type: "",
+                                  outp_status: "",
+                                  std_status: "",
+                                  created_at: "",
+                                } as Outpass)
+                              }
+                            >
                               <HighlightText text={comp.student_name} query={search} />
                             </h3>
                             <p className="text-xs text-gray-400">
@@ -1834,7 +1859,26 @@ function ChiefWarden() {
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 className="font-bold text-gray-900">
+                            <h3
+                              className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                              onClick={() =>
+                                log.student_id &&
+                                openHistoryModal({
+                                  id: log.id,
+                                  student_id: log.student_id,
+                                  name: log.name,
+                                  roll_no: log.roll_no,
+                                  phone: "",
+                                  department: log.department,
+                                  hostel: log.hostel || "",
+                                  place_of_visit: log.place_of_visit || "",
+                                  outpass_type: log.outpass_type || "",
+                                  outp_status: "",
+                                  std_status: log.std_status || "",
+                                  created_at: log.created_at || "",
+                                } as Outpass)
+                              }
+                            >
                               <HighlightText text={log.name} query={search} />
                             </h3>
                             <p className="text-xs text-gray-400">

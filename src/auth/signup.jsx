@@ -46,15 +46,25 @@ function Signup() {
       department: "",
 
       rollno: "",
+      
+      degree_type: "",
+      
+      academic_year: "",
 
       role: "student",
     });
+
+  const [otp, setOtp] = useState("");
+  const [isOtpSent, setIsOtpSent] = useState(false);
 
   const [error, setError] =
     useState("");
 
   const [loading, setLoading] =
-    useState(false);
+  useState(false);
+
+const [acceptedPrivacy, setAcceptedPrivacy] =
+  useState(false);
 
   /* ================= FLAGS ================= */
 
@@ -149,7 +159,9 @@ function Signup() {
           !formData.hostel ||
           !formData.room ||
           !formData.department ||
-          !formData.rollno
+          !formData.rollno ||
+          !formData.degree_type ||
+          !formData.academic_year
         ) {
 
           setError(
@@ -240,6 +252,46 @@ function Signup() {
 
         return;
       }
+      if (!acceptedPrivacy) {
+
+  setError(
+    "Please accept the Privacy Policy."
+  );
+
+  return;
+}
+
+      // If OTP hasn't been requested yet, request OTP first
+      if (!isOtpSent) {
+        try {
+          setLoading(true);
+          setError("");
+
+          await apiFetch("/api/auth/send-otp", {
+            method: "POST",
+            body: JSON.stringify(formData),
+          });
+
+          setIsOtpSent(true);
+          navigate("/verify-otp", {
+            state: {
+              email: formData.email,
+              role: formData.role,
+            },
+          });
+        } catch (err) {
+          console.error(err);
+          setError(err.message || "Failed to send OTP");
+        } finally {
+          setLoading(false);
+        }
+        return;
+      }
+
+      if (!otp) {
+        setError("Please enter the OTP printed in your terminal");
+        return;
+      }
 
       try {
 
@@ -276,6 +328,8 @@ function Signup() {
 
             rollno:
               formData.rollno,
+            
+            otp: otp,
           };
         }
 
@@ -298,6 +352,8 @@ function Signup() {
 
             hostel:
               formData.hostel,
+            
+            otp: otp,
           };
         }
 
@@ -315,6 +371,8 @@ function Signup() {
               formData.password,
 
             phone: formData.phone,
+            
+            otp: otp,
           }
         }else{
 payload = {
@@ -331,6 +389,8 @@ payload = {
             phone: formData.phone,
             hostel:
               formData.hostel,
+            
+            otp: otp,
           }
           };
 
@@ -526,15 +586,15 @@ payload = {
 
                 </option>
 
-                <option value="CSE">
+                <option value="ARCHITECTURE">
 
-                  Computer Science Engineering
+                  Architecture
 
                 </option>
 
-                <option value="ME">
+                <option value="CHEMICAL ENGINEERING">
 
-                  Mechanical Engineering
+                  Chemical Engineering
 
                 </option>
 
@@ -544,39 +604,9 @@ payload = {
 
                 </option>
 
-                <option value="EE">
+                <option value="CSE">
 
-                  Electrical Engineering
-
-                </option>
-
-                <option value="ECE">
-
-                  Electronics & Communication Engineering
-
-                </option>
-
-                <option value="MNC">
-
-                  Mathematics & Computing
-
-                </option>
-
-                <option value="ENGINEERING PHYSICS">
-
-                  Engineering Physics
-
-                </option>
-
-                <option value="MATERIAL SCIENCE">
-
-                  Material Science
-
-                </option>
-
-                <option value="ARCHITECTURE">
-
-                  Architecture
+                  Computer Science Engineering
 
                 </option>
 
@@ -592,6 +622,42 @@ payload = {
 
                 </option>
 
+                <option value="EE">
+
+                  Electrical Engineering
+
+                </option>
+
+                <option value="ECE">
+
+                  Electronics & Communication Engineering
+
+                </option>
+
+                <option value="ENGINEERING PHYSICS">
+
+                  Engineering Physics
+
+                </option>
+
+                <option value="MNC">
+
+                  Mathematics & Computing
+
+                </option>
+
+                <option value="MATERIAL SCIENCE">
+
+                  Material Science
+
+                </option>
+
+                <option value="ME">
+
+                  Mechanical Engineering
+
+                </option>
+
               </select>
 
               <input
@@ -599,6 +665,29 @@ payload = {
                 name="rollno"
                 placeholder="Roll Number"
                 value={formData.rollno}
+                onChange={handleChange}
+                className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
+              />
+              
+              <select
+                name="degree_type"
+                value={formData.degree_type}
+                onChange={handleChange}
+                className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
+              >
+                <option value="">Select Degree Type</option>
+                <option value="B.Tech">B.Tech</option>
+                <option value="M.Tech">M.Tech</option>
+                <option value="B.Arch">B.Arch</option>
+                <option value="Ph.D">Ph.D</option>
+                <option value="Dual Degree">Dual Degree</option>
+              </select>
+
+              <input
+                type="text"
+                name="academic_year"
+                placeholder="Academic Year (e.g., 2022-2026)"
+                value={formData.academic_year}
                 onChange={handleChange}
                 className="w-full border border-gray-300 p-3 rounded-md mb-4 outline-none focus:border-[#5b0e0e]"
               />
@@ -667,17 +756,61 @@ payload = {
             className="w-full border border-gray-300 p-3 rounded-md mb-5 outline-none focus:border-[#5b0e0e]"
           />
 
-          {/* ================= BUTTON ================= */}
+          {/* ================= OTP INPUT ================= */}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
-          >
+          {isOtpSent && (
+            <input
+              type="text"
+              name="otp"
+              placeholder="Enter OTP (Check terminal)"
+              value={otp}
+              onChange={(e) => setOtp(e.target.value)}
+              className="w-full border border-[#5b0e0e] p-3 rounded-md mb-5 outline-none focus:border-[#5b0e0e]"
+            />
+          )}
+
+          {/* ================= PRIVACY ================= */}
+
+<div className="flex items-start gap-2 mb-5">
+
+  <input
+    id="privacy"
+    type="checkbox"
+    checked={acceptedPrivacy}
+    onChange={(e) =>
+      setAcceptedPrivacy(e.target.checked)
+    }
+    className="mt-1 h-4 w-4 accent-[#5b0e0e]"
+  />
+
+  <label
+    htmlFor="privacy"
+    className="text-sm text-gray-600 leading-5"
+  >
+    I agree to the{" "}
+    <span className="font-semibold text-[#5b0e0e]">
+      Privacy Policy
+    </span>{" "}
+    and Hostel Rules.
+  </label>
+
+</div>
+
+{/* ================= BUTTON ================= */}
+
+<button
+  type="submit"
+  disabled={loading}
+  className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
+>
 
             {loading
-              ? "Creating Account..."
-              : "Create Account"}
+              ? isOtpSent
+                ? "Creating Account..."
+                : "Sending OTP..."
+              : isOtpSent
+              ? "Verify OTP & Create Account"
+              : "Get OTP & Create Account"}
 
           </button>
 

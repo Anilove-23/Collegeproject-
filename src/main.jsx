@@ -43,6 +43,9 @@ import GateLogs from "./guard/GateLogs";
 import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
 import Warden from "./warden/warden";
 
+/* ================= LOGS ================= */
+import LogsPage from "./logs/LogsPage";
+
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
   return (
@@ -181,6 +184,11 @@ const router = createBrowserRouter([
   {
     path: "/wardenhostel",
     element: <Warden />,
+    errorElement: <ErrorPage />,
+  },
+  {
+    path: "/logs",
+    element: <LogsPage />,
     errorElement: <ErrorPage />,
   },
   {
