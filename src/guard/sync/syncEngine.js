@@ -23,12 +23,10 @@ import {
 
 // ─── Config ────────────────────────────────────────────────
 const SYNC_INTERVAL_MS = 30_000;   // flush queue every 30 s
-const PULL_INTERVAL_MS = 60_000;   // pull outpasses every 60 s
 const LAST_SYNC_KEY = 'guard_last_sync_at';
 
 let _onOutpassesUpdated = null;    // callback to refresh React state
 let _syncIntervalId = null;
-let _pullIntervalId = null;
 let _initialized = false;
 let _isFlushing = false;           // concurrency lock — prevents duplicate POSTs
 
