@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { apiFetch } from '../utils/api';
 
 const COMPLAINT_TYPES = [
   { value: "cleaning", label: "Cleaning" },
@@ -52,24 +53,17 @@ export default function ComplaintForm({ onSuccess, onCancel }) {
       setLoading(true);
       setError("");
 
-      const response = await fetch('http://localhost:5000/complaint/add', {
+      const responseData = await apiFetch('/complaint/postcomplaint', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          'role': user.role || 'student'
-        },
         body: JSON.stringify({
           title: form.title,
           description: form.description,
-          type: form.type
+          type: form.type,
+          hostel: user.hostel
         }),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to submit complaint');
-      }
+      // error handling is managed by apiFetch
 
       setForm(INITIAL_FORM);
       if (onSuccess) onSuccess();

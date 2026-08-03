@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useState,
 } from "react";
 
@@ -19,7 +20,7 @@ function Login() {
   const inferRole = (role, emailValue) => {
     const normalizedEmail = String(emailValue || "").toLowerCase();
 
-    if (normalizedEmail.includes("attendant")) return "attendant";
+    if (normalizedEmail.includes("attendant") || normalizedEmail.includes("att_")) return "attendant";
     if (normalizedEmail.includes("chief")) return "chief-warden";
     if (normalizedEmail.includes("warden")) return "warden";
     if (normalizedEmail.includes("guard")) return "guard";
@@ -30,29 +31,29 @@ function Login() {
 
   /* ================= REDIRECT ================= */
 
- const getRedirectPath = (role) => {
+  const getRedirectPath = (role) => {
 
-  switch (role) {
+    switch (role) {
 
-    case "student":
-      return "/student";
+      case "student":
+        return "/student";
 
-    case "attendant":
-      return "/attendant";
+      case "attendant":
+        return "/attendant";
 
-    case "guard":
-      return "/guard";
+      case "guard":
+        return "/guard";
 
-    case "warden":
-      return "/warden";
+      case "warden":
+        return "/warden";
 
-    case "chief-warden":
-      return "/chief-warden";
+      case "chief-warden":
+        return "/chief-warden";
 
-    default:
-      return "/student";
-  }
-};
+      default:
+        return "/student";
+    }
+  };
 
   /* ================= STATE ================= */
 
@@ -72,17 +73,44 @@ function Login() {
   const [loading, setLoading] =
     useState(false);
 
+  const [otpPending, setOtpPending] =
+    useState(false);
+
+  const [otpRole, setOtpRole] =
+    useState("");
+
+  const [otp, setOtp] =
+    useState("");
+
+  const [otpCountdown, setOtpCountdown] =
+    useState(0);
+
+  useEffect(() => {
+    if (!otpPending || otpCountdown <= 0) return;
+
+    const timer = window.setTimeout(() => {
+      setOtpCountdown((count) => count - 1);
+    }, 1000);
+
+    return () => window.clearTimeout(timer);
+  }, [otpPending, otpCountdown]);
+
   /* ================= HANDLE CHANGE ================= */
-  
+
   const getMachineId = () => {
-  let machineId = localStorage.getItem('GATE_MACHINE_ID');
-  if (!machineId) {
-    machineId = 'GATE_MAC_' + crypto.randomUUID();
-    localStorage.setItem('GATE_MACHINE_ID', machineId);
-  }
-  return machineId;
-};
+    let machineId = localStorage.getItem('GATE_MACHINE_ID');
+    if (!machineId) {
+      machineId = 'GATE_MAC_' + crypto.randomUUID();
+      localStorage.setItem('GATE_MACHINE_ID', machineId);
+    }
+    return machineId;
+  };
   const handleChange = (e) => {
+    if (e.target.name === "email" || e.target.name === "password") {
+      setOtpPending(false);
+      setOtp("");
+      setOtpCountdown(0);
+    }
 
     setFormData({
       ...formData,
@@ -90,6 +118,64 @@ function Login() {
       [e.target.name]:
         e.target.value,
     });
+  };
+
+  const persistAuth = (data, normalizedRole) => {
+    localStorage.setItem("token", data.token || "");
+    localStorage.setItem("role", normalizedRole);
+
+    localStorage.setItem(
+      "user",
+      JSON.stringify({
+        ...data.user,
+        token: data.token,
+        role: normalizedRole,
+      })
+    );
+
+    navigate(getRedirectPath(normalizedRole));
+  };
+
+  const submitLoginRequest = async () => {
+    const loginRole = inferRole("student", formData.email);
+
+    const headers = {
+      "Content-Type": "application/json",
+    };
+
+    if (loginRole === "guard") {
+      headers["X-Machine-ID"] = getMachineId();
+    }
+
+    const data =
+      (await apiFetch("/api/auth/login", {
+        method: "POST",
+        headers,
+        body: JSON.stringify({
+          email: formData.email,
+          password: formData.password,
+          role: loginRole,
+        }),
+      })) || {};
+
+    if (data?.success && data?.message === "OTP generated") {
+      setOtpPending(true);
+      setOtpRole(loginRole);
+      setOtp("");
+      setOtpCountdown(60);
+      setError("");
+      return { requiresOtp: true };
+    }
+
+    const role = data?.role || "student";
+    const normalizedRole = inferRole(role, formData.email);
+
+    if (data?.token) {
+      persistAuth(data, normalizedRole);
+      return { success: true };
+    }
+
+    throw new Error(data?.message || "Login failed");
   };
 
   /* ================= LOGIN ================= */
@@ -101,8 +187,7 @@ function Login() {
 
       if (
         !formData.email ||
-        !formData.password 
-        // !formData.role
+        !formData.password
       ) {
 
         setError(
@@ -118,53 +203,7 @@ function Login() {
 
         setError("");
 
-       const loginRole = inferRole("student", formData.email);
-
-const headers = {
-  "Content-Type": "application/json",
-};
-
-if (loginRole === "guard") {
-  headers["X-Machine-ID"] = getMachineId();
-}
-
-const data =
-  (await apiFetch("/api/auth/login", {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      email: formData.email,
-      password: formData.password,
-      loginRole,
-    }),
-  })) || {};
-
-if (data?.success && data?.message === "OTP generated") {
-  navigate("/verify-otp", { state: { email: formData.email } });
-  return;
-}
-
-const role = data?.role || "student";
-const normalizedRole = inferRole(role, formData.email);
-
-if (data?.token) {
-  localStorage.setItem("token", data.token);
-  localStorage.setItem("role", normalizedRole);
-
-  localStorage.setItem(
-    "user",
-    JSON.stringify({
-      ...data.user,
-      token: data.token,
-      role: normalizedRole,
-    })
-  );
-
-  navigate(getRedirectPath(normalizedRole));
-  return;
-}
-
-setError(data?.message || "Login failed");
+        await submitLoginRequest();
 
       } catch (err) {
 
@@ -180,6 +219,61 @@ setError(data?.message || "Login failed");
         setLoading(false);
       }
     };
+
+  const handleVerifyOtp = async (e) => {
+    e.preventDefault();
+
+    if (!otp) {
+      setError("Please enter the OTP");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+
+      const data =
+        (await apiFetch("/api/auth/verify-login-otp", {
+          method: "POST",
+          body: JSON.stringify({
+            email: formData.email,
+            otp,
+            role: otpRole || inferRole("student", formData.email),
+          }),
+        })) || {};
+
+      if (!data?.token) {
+        throw new Error(data?.message || "OTP verification failed");
+      }
+
+      const role = data?.role || "student";
+      const normalizedRole = inferRole(role, formData.email);
+      persistAuth(data, normalizedRole);
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "OTP verification failed");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResendOtp = async () => {
+    if (!formData.email || !formData.password) {
+      setError("Please fill all fields");
+      return;
+    }
+
+    try {
+      setLoading(true);
+      setError("");
+      await submitLoginRequest();
+    } catch (err) {
+      console.error(err);
+      setError(err.message || "Failed to resend OTP");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
 
@@ -303,19 +397,58 @@ setError(data?.message || "Login failed");
 
           </select> */}
 
+          {otpPending && (
+            <div className="mb-5">
+              <input
+                type="text"
+                value={otp}
+                onChange={(e) => setOtp(e.target.value)}
+                placeholder="Enter OTP"
+                maxLength={6}
+                className="w-full border border-gray-300 p-3 rounded-md mb-3 outline-none focus:border-[#5b0e0e]"
+              />
+
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <button
+                  type="button"
+                  onClick={handleVerifyOtp}
+                  disabled={loading || !otp}
+                  className="flex-1 bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
+                >
+                  {loading ? "Verifying..." : "Verify OTP"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleResendOtp}
+                  disabled={loading || otpCountdown > 0}
+                  className="flex-1 border border-[#5b0e0e] text-[#5b0e0e] hover:bg-[#f7eaea] transition py-3 rounded-md disabled:opacity-50"
+                >
+                  {loading
+                    ? "Sending..."
+                    : otpCountdown > 0
+                      ? `Resend OTP (${otpCountdown}s)`
+                      : "Resend OTP"}
+                </button>
+              </div>
+            </div>
+          )}
+
           {/* BUTTON */}
 
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
-          >
+          {!otpPending && (
+            <button
+              type="submit"
+              disabled={loading}
+              className="w-full bg-[#5b0e0e] hover:bg-[#741616] transition text-white py-3 rounded-md disabled:opacity-50"
+            >
 
-            {loading
-              ? "Logging in..."
-              : "Login"}
+              {loading
+                ? "Logging in..."
+                : "Login"}
 
-          </button>
+            </button>
+          )}
 
           {/* SIGNUP */}
 
