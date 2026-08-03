@@ -56,14 +56,14 @@ export default function ApprovedPage() {
       setError("");
 
       const result = await apiFetch(
-        `/api/students/status?page=${currentPage}&limit=${limit}`,
-        {
-          method: "POST",
-          body: JSON.stringify({
-            outp_status: "Approved",
-          }),
-        }
-      );
+  `/api/students/hostel-status?page=${currentPage}&limit=${limit}`,
+  {
+    method: "POST",
+    body: JSON.stringify({
+      outp_status: "Approved",
+    }),
+  }
+);
 
       setData(result?.data?.outpasses || []);
 
@@ -87,6 +87,29 @@ export default function ApprovedPage() {
       setData([]);
     } finally {
       setLoading(false);
+    }
+  }
+
+  // ===========================
+  // View (fetch full outpass details)
+  // ===========================
+
+  async function handleView(outpass) {
+    try {
+      const result = await apiFetch(
+        `/api/students/outpass/${outpass.outpass_id}`
+      );
+
+      setSelected(result.data);
+    } catch (err) {
+      console.error(err);
+
+      setToast({
+        type: "error",
+        message:
+          err.message ||
+          "Failed to fetch outpass details",
+      });
     }
   }
 
@@ -196,7 +219,7 @@ export default function ApprovedPage() {
 
     <HistoryTable
       data={processed}
-      onView={setSelected}
+      onView={handleView}
       statusColor="bg-green-100 text-green-700"
       emptyMessage="No approved outpasses found"
     />
@@ -212,7 +235,8 @@ export default function ApprovedPage() {
 
     {selected && (
       <OutpassModal
-        outpass={selected}
+        outpass={selected?.outpass}
+        remarks={selected?.remarks}
         onClose={() => setSelected(null)}
       />
     )}

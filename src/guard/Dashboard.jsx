@@ -124,23 +124,31 @@ export default function GuardDashboard() {
     }
   }
 
-  /* ─── Bulk Gate Action ───────────────────────────────────── */
+  /* ─── Bulk Gate Action — local-first ────────────────────── */
   async function handleBulkGateAction(actionType) {
     if (!selectedIds.length) return;
     try {
       setBulkProcessing(true);
+
+      // Only act on selected records whose current state actually
+      // matches the requested bulk action (e.g. don't "exit" someone
+      // who's already outside).
       const targets = data.filter((o) => {
         const id = o.id || o.outpass_id;
         const isCurrentlyIn = o.std_status === "In" || !o.std_status;
         const recordTargetAction = isCurrentlyIn ? "exit" : "enter";
         return selectedIds.includes(id) && recordTargetAction === actionType;
       });
+
+      // Reuse the single-record handler so each action goes through the
+      // same offline-first path: enqueue to Dexie, update local cache,
+      // update React state, and flush the sync queue if online.
       for (const record of targets) {
         await handleGateAction(record, null);
       }
-      setSelectedIds([]);
     } catch (err) {
       console.error("Bulk processing error", err);
+      alert(err.message || `Failed to bulk ${actionType}`);
     } finally {
       setBulkProcessing(false);
     }

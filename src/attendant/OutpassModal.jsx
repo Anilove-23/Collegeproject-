@@ -1,11 +1,26 @@
-import React from "react";
+import React, { useEffect } from "react";
 
 import DetailCard from "./DetailCard";
 
 export default function OutpassModal({
   outpass,
+  remarks = [],
   onClose,
 }) {
+
+  /* ================= LOCK BODY SCROLL ================= */
+
+  useEffect(() => {
+
+    const original = document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    return () => {
+      document.body.style.overflow = original;
+    };
+
+  }, []);
 
   /* ================= FORMAT DATE ================= */
 
@@ -36,6 +51,47 @@ export default function OutpassModal({
         "_blank"
       );
 
+    const remarksHtml =
+      remarks && remarks.length > 0
+        ? remarks
+            .map(
+              (r) => `
+                <div class="card" style="margin-bottom: 12px;">
+
+                  <div class="label">
+                    Role
+                  </div>
+
+                  <div class="value">
+                    ${r.admin_role || "-"}
+                  </div>
+
+                  <div class="label" style="margin-top: 10px;">
+                    Remark
+                  </div>
+
+                  <div class="value">
+                    ${r.remark || "-"}
+                  </div>
+
+                  <div class="label" style="margin-top: 10px;">
+                    Date
+                  </div>
+
+                  <div class="value">
+                    ${formatDate(r.created_at)}
+                  </div>
+
+                </div>
+              `
+            )
+            .join("")
+        : `<div class="card">
+             <div class="value">
+               No remarks available.
+             </div>
+           </div>`;
+
     w.document.write(`
       <html>
 
@@ -57,6 +113,12 @@ export default function OutpassModal({
             h1 {
               color: #6d0f16;
               margin-bottom: 10px;
+            }
+
+            h2 {
+              color: #6d0f16;
+              margin-top: 30px;
+              margin-bottom: 14px;
             }
 
             .subtitle {
@@ -236,6 +298,12 @@ export default function OutpassModal({
 
           </div>
 
+          <h2>
+            Remarks History
+          </h2>
+
+          ${remarksHtml}
+
         </body>
 
       </html>
@@ -248,7 +316,7 @@ export default function OutpassModal({
 
     <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
 
-      <div className="bg-white w-full max-w-5xl rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
+      <div className="bg-white w-full max-w-5xl mx-2 sm:mx-4 rounded-3xl shadow-2xl overflow-hidden animate-in fade-in zoom-in duration-200">
 
         {/* ================= HEADER ================= */}
 
@@ -256,13 +324,13 @@ export default function OutpassModal({
 
           <div>
 
-            <h2 className="text-3xl font-bold">
+            <h2 className="text-2xl md:text-3xl font-bold">
 
               Outpass Details
 
             </h2>
 
-            <p className="text-sm text-white/70 mt-2">
+            <p className="text-sm text-white/70 mt-2 break-all">
 
               OP-
               {String(
@@ -286,13 +354,13 @@ export default function OutpassModal({
 
         {/* ================= BODY ================= */}
 
-        <div className="p-7 max-h-[75vh] overflow-y-auto">
+        <div className="p-7 max-h-[85vh] overflow-y-auto">
 
           {/* TOP STUDENT INFO */}
 
           <div className="bg-gray-50 border rounded-3xl p-6 mb-7">
 
-            <div className="flex flex-wrap items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-center sm:items-center gap-4 text-center sm:text-left">
 
               <div className="w-16 h-16 rounded-full bg-[#6d0f16] text-white flex items-center justify-center text-2xl font-bold">
 
@@ -444,15 +512,78 @@ export default function OutpassModal({
 
           </div>
 
+          {/* ================= REMARKS HISTORY ================= */}
+
+          <div className="mt-8">
+
+            <h3 className="text-lg font-bold text-gray-800 mb-4">
+
+              Remarks History
+
+            </h3>
+
+            {remarks && remarks.length > 0 ? (
+
+              <div className="space-y-4 relative pl-4 border-l-2 border-gray-200">
+
+                {remarks.map((r, idx) => (
+
+                  <div
+                    key={idx}
+                    className="bg-gray-50 border rounded-2xl p-4 relative"
+                  >
+
+                    <span className="absolute -left-[22px] top-5 w-3 h-3 rounded-full bg-[#6d0f16]" />
+
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+
+                      <span className="px-3 py-1 rounded-full bg-red-100 text-[#6d0f16] text-xs font-semibold uppercase">
+
+                        {r.admin_role || "-"}
+
+                      </span>
+
+                      <span className="text-xs text-gray-500">
+
+                        {formatDate(r.created_at)}
+
+                      </span>
+
+                    </div>
+
+                    <p className="text-sm text-gray-700 mt-3 break-words">
+
+                      {r.remark || "-"}
+
+                    </p>
+
+                  </div>
+
+                ))}
+
+              </div>
+
+            ) : (
+
+              <div className="bg-gray-50 border rounded-2xl p-4 text-sm text-gray-500">
+
+                No remarks available.
+
+              </div>
+
+            )}
+
+          </div>
+
         </div>
 
         {/* ================= FOOTER ================= */}
 
-        <div className="border-t px-7 py-5 flex justify-end gap-4 bg-gray-50">
+        <div className="border-t px-7 py-5 flex flex-col sm:flex-row justify-end gap-4 bg-gray-50">
 
           <button
             onClick={onClose}
-            className="px-6 py-3 border rounded-2xl hover:bg-gray-100 transition font-medium"
+            className="w-full sm:w-auto px-6 py-3 min-h-[44px] border rounded-2xl hover:bg-gray-100 transition font-medium"
           >
 
             Close
@@ -461,7 +592,7 @@ export default function OutpassModal({
 
           <button
             onClick={printPDF}
-            className="px-6 py-3 bg-[#6d0f16] hover:bg-[#560c12] text-white rounded-2xl transition font-medium shadow-sm"
+            className="w-full sm:w-auto px-6 py-3 min-h-[44px] bg-[#6d0f16] hover:bg-[#560c12] text-white rounded-2xl transition font-medium shadow-sm"
           >
 
             Print / PDF

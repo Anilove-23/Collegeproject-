@@ -40,7 +40,7 @@ export default function OutpassLayout() {
       setError("");
 
       const data = await apiFetch("/api/outpasses/my");
-      console.log(data);
+      // console.log(data);
 
       setOutpasses(data?.data || []);
     } catch (err) {
