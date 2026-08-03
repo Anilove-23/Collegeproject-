@@ -119,6 +119,16 @@ function extractFieldErrors(err: any): Record<string, string> {
   return {};
 }
 
+// Normalizes rows coming back from endpoints that alias the outpass primary
+// key as `outpass_id` (e.g. POST /api/students/hostel-status and
+// POST /api/students/range) into the `id` field the rest of this component
+// (Outpass interface, approve/reject/details handlers, row keys, checkboxes)
+// expects. Endpoints that already return `o.*` (e.g. GET /api/outpasses/monitor)
+// already have `id` and pass through unchanged.
+function normalizeOutpassId(o: any) {
+  return { ...o, id: o?.id ?? o?.outpass_id };
+}
+
 /* ================= COMPONENT ================= */
 
 export default function Warden() {
@@ -283,7 +293,10 @@ export default function Warden() {
         ? res.data.outpasses
         : [];
 
-      setOutpasses(list);
+      // /api/outpasses/monitor already returns the raw `outpass` row (o.*),
+      // so `id` is already present here — normalizeOutpassId is a no-op for
+      // this endpoint but kept for consistency/safety.
+      setOutpasses(list.map(normalizeOutpassId));
     } catch (err: any) {
       console.log("Failed to load outpasses:", err);
       setOutpasses([]);
@@ -372,6 +385,13 @@ export default function Warden() {
   // IMPORTANT: the backend expects the field name `outp_status` (matching the
   // Outpass model), not a generic `status` — sending the wrong key was why the
   // filter previously came back empty/unfiltered.
+  //
+  // IMPORTANT #2: the backend query for this endpoint aliases the outpass
+  // primary key as `o.id AS outpass_id`, not `id`. Every row returned here is
+  // run through normalizeOutpassId() so `.id` (used by View Details, Approve,
+  // Reject, and the row/checkbox keys) is always populated. Without this, those
+  // actions send requests like `/api/outpasses/approve/undefined`, which the
+  // backend rejects with "Invalid outpass id".
   const fetchStatusResults = useCallback(
     async (status: string) => {
       // "All" has no backend-meaningful status to send; just use the monitor list.
@@ -406,7 +426,7 @@ export default function Warden() {
           ? res.data.outpasses
           : [];
 
-        setStatusResults(list);
+        setStatusResults(list.map(normalizeOutpassId));
       } catch (err: any) {
         if (requestId !== statusRequestIdRef.current) return; // stale response, ignore
         console.log("Status filter fetch failed:", err);
@@ -694,6 +714,13 @@ export default function Warden() {
 
   // Extracted from the submit handler so it can also be called silently by
   // refreshAfterAction() (no loading spinner / validation noise on refresh).
+  //
+  // NOTE: POST /api/students/range returns { data: { students: [...], pagination } }
+  // (NOT { data: { outpasses: [...] } }), and each row aliases the outpass
+  // primary key as `outpass_id`, same as /api/students/hostel-status. Both the
+  // extraction path and the id normalization below account for that — without
+  // them this list comes back empty, and any row that did render would send
+  // approve/reject/details requests with an `undefined` id ("Invalid outpass id").
   async function runRangeSearch() {
     const res: any = await apiFetch("/api/students/range", {
       method: "POST",
@@ -707,13 +734,17 @@ export default function Warden() {
       ? res
       : Array.isArray(res?.data)
       ? res.data
+      : Array.isArray(res?.students)
+      ? res.students
+      : Array.isArray(res?.data?.students)
+      ? res.data.students
       : Array.isArray(res?.outpasses)
       ? res.outpasses
       : Array.isArray(res?.data?.outpasses)
       ? res.data.outpasses
       : [];
 
-    setRangeResults(list);
+    setRangeResults(list.map(normalizeOutpassId));
   }
 
   async function handleRangeSearch(e: React.FormEvent) {
