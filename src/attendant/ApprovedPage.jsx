@@ -71,7 +71,7 @@ export default function ApprovedPage() {
       outp_status: "Approved",
     }),
   }
-);
+
 
       setData(result?.data?.outpasses || []);
 

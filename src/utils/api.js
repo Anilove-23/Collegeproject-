@@ -5,7 +5,6 @@ export async function apiFetch(
   endpoint,
   options = {}
 ) {
-
   const token =
     localStorage.getItem("token");
 
@@ -19,7 +18,6 @@ export async function apiFetch(
         ...options,
 
         headers: {
-
           "Content-Type":
             "application/json",
 
@@ -43,10 +41,9 @@ export async function apiFetch(
 
   if (
     (response.status === 401 || response.status === 403) &&
-    !endpoint.includes('/login') && !endpoint.includes('/verify-otp')
-    !isAuthEndpoint &&
-    (response.status === 401 ||
-    response.status === 403)
+    !endpoint.includes("/login") &&
+    !endpoint.includes("/verify-otp") &&
+    !isAuthEndpoint
   ) {
     localStorage.clear();
     window.location.href =
@@ -63,26 +60,24 @@ export async function apiFetch(
   let data = {};
 
   try {
-
     data = text
       ? JSON.parse(text)
       : {};
-
   } catch {
-
     throw new Error(
       "Invalid server response"
     );
   }
 
   if (!response.ok) {
-
     const err = new Error(
       data.message ||
-      data.error ||
-      "Request failed"
+        data.error ||
+        "Request failed"
     );
+
     err.data = data;
+
     throw err;
   }
 
