@@ -40,10 +40,8 @@ export async function apiFetch(
   const isAuthEndpoint = endpoint.startsWith("/api/auth/");
 
   if (
-    (response.status === 401 || response.status === 403) &&
-    !endpoint.includes("/login") &&
-    !endpoint.includes("/verify-otp") &&
-    !isAuthEndpoint
+    !isAuthEndpoint &&
+    (response.status === 401 || response.status === 403)
   ) {
     localStorage.clear();
     window.location.href =

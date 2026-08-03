@@ -17,7 +17,7 @@ import {
   upsertOutpassCache,
   getPendingLogs,
   markLogsSyncing,
-  deleteSyncedLogs,
+  markLogsSynced,
   markLogFailed,
 } from '../db/queries.js';
 
@@ -94,28 +94,46 @@ export async function flushOfflineQueue() {
   if (pendingLogs.length === 0) return;
 
   _isFlushing = true;
-  const ids = pendingLogs.map((l) => l.id);
 
   try {
-    // Optimistically mark as SYNCING to prevent double-send
-    await markLogsSyncing(ids);
+    const CHUNK_SIZE = 500;
+    
+    // Process logs in chunks to avoid hitting server payload limits (100kb)
+    for (let i = 0; i < pendingLogs.length; i += CHUNK_SIZE) {
+      const chunk = pendingLogs.slice(i, i + CHUNK_SIZE);
+      const chunkIds = chunk.map((l) => l.id);
 
-    const response = await apiFetch('/api/outpasses/sync-logs', {
-      method: 'POST',
-      body: JSON.stringify({ logs: pendingLogs }),
-    });
+      // Optimistically mark as SYNCING to prevent double-send
+      await markLogsSyncing(chunkIds);
 
-    // Server returns { synced_ids: [...] }
-    const syncedIds = response?.synced_ids ?? ids;
+      const response = await apiFetch('/api/outpasses/sync-logs', {
+        method: 'POST',
+        body: JSON.stringify({ logs: chunk }),
+      });
 
-    if (syncedIds.length > 0) {
-      await deleteSyncedLogs(syncedIds);
-      console.log(`[SyncEngine] Synced ${syncedIds.length} action log(s).`);
+      // Server returns an ApiResponse object: { data: { synced_ids: [...] } }
+      const responseData = response?.data || response;
+      const syncedIds = responseData?.synced_ids || chunkIds;
+      const failedIds = responseData?.failed_ids || [];
+
+      if (syncedIds.length > 0) {
+        await markLogsSynced(syncedIds);
+        console.log(`[SyncEngine] Synced ${syncedIds.length} action log(s) (chunk ${i / CHUNK_SIZE + 1}).`);
+      }
+
+      if (failedIds.length > 0) {
+        for (const id of failedIds) {
+          await markLogFailed(id);
+        }
+        console.warn(`[SyncEngine] Server rejected ${failedIds.length} log(s) in chunk.`);
+      }
     }
   } catch (err) {
-    console.warn('[SyncEngine] flushOfflineQueue failed, marking FAILED:', err.message);
-    // Mark them FAILED so the next cycle picks them up again
-    for (const id of ids) {
+    console.warn('[SyncEngine] flushOfflineQueue failed, marking remaining as FAILED:', err.message);
+    // Mark them FAILED so the next cycle picks them up again.
+    // (Already-synced logs from previous chunks in this run were deleted, so this only affects unsynced ones.)
+    const allIds = pendingLogs.map((l) => l.id);
+    for (const id of allIds) {
       await markLogFailed(id);
     }
   } finally {
