@@ -107,11 +107,15 @@ export async function getPendingLogs() {
 }
 
 /**
- * Mark a batch of logs as SYNCED and remove them from the queue.
+ * Mark a batch of logs as SYNCED so they stay in local history.
  * @param {string[]} ids - UUIDs of synced log entries
  */
-export async function deleteSyncedLogs(ids) {
-  await guardDb.action_logs.bulkDelete(ids);
+export async function markLogsSynced(ids) {
+  await guardDb.transaction('rw', guardDb.action_logs, async () => {
+    for (const id of ids) {
+      await guardDb.action_logs.update(id, { sync_status: 'SYNCED' });
+    }
+  });
 }
 
 /**
