@@ -26,6 +26,7 @@ export default function GuardLayout() {
         <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
           <NavItem to="/guard/dashboard" label="Gate Terminal" icon="🚪" />
           <NavItem to="/guard/logs" label="Movement Logs" icon="📋" />
+          <NavItem to="/guard/dayscholar" label="Day Scholar" icon="☀️" />
         </nav>
 
         {/* FOOTER & LOGOUT */}

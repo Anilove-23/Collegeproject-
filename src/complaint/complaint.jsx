@@ -61,7 +61,7 @@ export default function ComplaintLayout() {
 
       const data = await response.json();
       setComplaints(data.complaints || []);
-      
+
       const globalResponse = await fetch('http://localhost:5000/complaint/hostel-complaints', {
         method: 'GET',
         headers: {
@@ -74,7 +74,7 @@ export default function ComplaintLayout() {
 
       const globalData = await globalResponse.json();
       setGlobalComplaints(globalData.complaints || []);
-      
+
     } catch (err) {
       console.error(err);
       setError(err.message || "Failed to fetch complaints");
@@ -91,18 +91,18 @@ export default function ComplaintLayout() {
   const handleUpvote = async (complaintId) => {
     let token = localStorage.getItem("token");
     const userStr = localStorage.getItem("user");
-    
+
     if (token && token.startsWith('"') && token.endsWith('"')) token = token.slice(1, -1);
     const user = userStr ? JSON.parse(userStr) : {};
 
     try {
       setUpvotedItems(prev => [...prev, complaintId]);
-      
-      setComplaints(complaints.map(c => 
+
+      setComplaints(complaints.map(c =>
         c.id === complaintId ? { ...c, upvotes: (c.upvotes || 0) + 1 } : c
       ));
-      
-      setGlobalComplaints(globalComplaints.map(c => 
+
+      setGlobalComplaints(globalComplaints.map(c =>
         c.id === complaintId ? { ...c, upvotes: (c.upvotes || 0) + 1 } : c
       ));
 
@@ -123,15 +123,15 @@ export default function ComplaintLayout() {
     } catch (err) {
       console.error(err);
       setUpvotedItems(prev => prev.filter(id => id !== complaintId));
-      
-      setComplaints(complaints.map(c => 
+
+      setComplaints(complaints.map(c =>
         c.id === complaintId ? { ...c, upvotes: (c.upvotes || 1) - 1 } : c
       ));
-      
-      setGlobalComplaints(globalComplaints.map(c => 
+
+      setGlobalComplaints(globalComplaints.map(c =>
         c.id === complaintId ? { ...c, upvotes: (c.upvotes || 1) - 1 } : c
       ));
-      
+
       alert(err.message || "Failed to register upvote. Please try again.");
     }
   };
@@ -195,9 +195,8 @@ export default function ComplaintLayout() {
 
       {/* ================= SIDEBAR ================= */}
       <aside
-        className={`fixed lg:static inset-y-0 left-0 z-50 w-72 md:w-64 lg:w-80 bg-gradient-to-b from-[#6d0f16] to-[#8b0f18] text-white flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out ${
-          drawerOpen ? "translate-x-0" : "-translate-x-full"
-        } lg:translate-x-0`}
+        className={`fixed lg:static inset-y-0 left-0 z-50 w-72 md:w-64 lg:w-80 bg-gradient-to-b from-[#6d0f16] to-[#8b0f18] text-white flex flex-col shadow-2xl transform transition-transform duration-300 ease-in-out ${drawerOpen ? "translate-x-0" : "-translate-x-full"
+          } lg:translate-x-0`}
       >
         {/* HEADER */}
         <div className="p-6 sm:p-8 border-b border-white/10 flex items-start justify-between">
@@ -300,7 +299,7 @@ export default function ComplaintLayout() {
                   {active === "global" ? "Hostel Complaints" : "My Complaints"}
                 </h2>
                 <p className="text-gray-500 mt-1 text-xs sm:text-sm">
-                  {active === "global" 
+                  {active === "global"
                     ? "View and upvote issues reported in your hostel"
                     : "Track and manage your hostel issues"}
                 </p>
@@ -355,27 +354,25 @@ export default function ComplaintLayout() {
                   status === "All"
                     ? activeDataset.length
                     : activeDataset.filter(
-                        (c) =>
-                          c.status?.toLowerCase() === status.toLowerCase()
-                      ).length;
+                      (c) =>
+                        c.status?.toLowerCase() === status.toLowerCase()
+                    ).length;
 
                 return (
                   <button
                     key={status}
                     onClick={() => handleFilterChange(status)}
-                    className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-200 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:ring-offset-1 ${
-                      filter === status
+                    className={`px-4 sm:px-5 py-2.5 rounded-xl text-xs font-semibold border transition-all duration-200 flex items-center gap-2 focus:outline-none focus:ring-2 focus:ring-[#6d0f16] focus:ring-offset-1 ${filter === status
                         ? "bg-[#6d0f16] text-white border-[#6d0f16] shadow-md"
                         : "bg-white hover:bg-gray-100 text-gray-600 border-gray-200 shadow-sm"
-                    }`}
+                      }`}
                   >
                     <span>{status}</span>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[10px] ${
-                        filter === status
+                      className={`px-2 py-0.5 rounded-full text-[10px] ${filter === status
                           ? "bg-white/20 text-white"
                           : "bg-gray-100 text-gray-500"
-                      }`}
+                        }`}
                     >
                       {count}
                     </span>
@@ -401,7 +398,7 @@ export default function ComplaintLayout() {
 
         {/* CREATE TAB */}
         {active === "create" && (
-          <ComplaintForm 
+          <ComplaintForm
             onSuccess={async () => {
               await fetchComplaints();
               setActive("my");
@@ -474,11 +471,10 @@ function NavItem({ title, active, onClick, icon }) {
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 font-medium text-sm flex items-center justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-white/60 ${
-        active
+      className={`w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 font-medium text-sm flex items-center justify-between gap-3 focus:outline-none focus:ring-2 focus:ring-white/60 ${active
           ? "bg-white text-[#6d0f16] shadow-lg font-semibold"
           : "hover:bg-white/10 text-white/90"
-      }`}
+        }`}
     >
       <span className="flex items-center gap-3">
         {icon}
@@ -576,11 +572,10 @@ function MyComplaints({
                     <button
                       onClick={() => onUpvote(c.id)}
                       disabled={upvotedItems.includes(c.id)}
-                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${
-                        upvotedItems.includes(c.id)
+                      className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${upvotedItems.includes(c.id)
                           ? 'bg-red-50 text-red-800 border-red-200 cursor-not-allowed opacity-80'
                           : 'bg-white text-[#6d0f16] border-gray-200 hover:bg-gray-50 active:bg-gray-100 shadow-sm'
-                      }`}
+                        }`}
                     >
                       <span>👍</span> {c.upvotes || 0}
                     </button>
@@ -626,11 +621,10 @@ function MyComplaints({
                 <button
                   onClick={() => onUpvote(c.id)}
                   disabled={upvotedItems.includes(c.id)}
-                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${
-                    upvotedItems.includes(c.id)
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all border focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${upvotedItems.includes(c.id)
                       ? 'bg-red-50 text-red-800 border-red-200 cursor-not-allowed opacity-80'
                       : 'bg-white text-[#6d0f16] border-gray-200 hover:bg-gray-50 active:bg-gray-100 shadow-sm'
-                  }`}
+                    }`}
                 >
                   <span>👍</span> {c.upvotes || 0}
                 </button>
@@ -715,7 +709,7 @@ function ComplaintModal({ complaint, onClose, onUpvote, isUpvoted }) {
               )}
             </div>
           </div>
-          
+
           <div className="col-span-full mt-2">
             <Detail label="Description" value={complaint.description} />
           </div>
@@ -739,16 +733,15 @@ function ComplaintModal({ complaint, onClose, onUpvote, isUpvoted }) {
               Filed on: {new Date(complaint.date_created).toLocaleString("en-IN")}
             </p>
             {complaint.status === 'pending' && (
-              <button 
+              <button
                 onClick={onUpvote}
                 disabled={isUpvoted}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${
-                  isUpvoted
+                className={`flex items-center gap-1.5 px-4 py-2 rounded-xl transition-all text-sm font-bold shadow-sm focus:outline-none focus:ring-2 focus:ring-[#6d0f16] ${isUpvoted
                     ? 'bg-red-50 text-red-800 border border-red-200 cursor-not-allowed opacity-80'
                     : 'bg-white text-[#6d0f16] border border-gray-200 hover:bg-gray-50 active:bg-gray-100'
-                }`}
+                  }`}
               >
-                <span>👍</span> 
+                <span>👍</span>
                 {isUpvoted ? 'Upvoted' : 'Upvote'} ({complaint.upvotes || 0})
               </button>
             )}

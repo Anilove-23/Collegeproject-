@@ -42,7 +42,7 @@ export default function ComplaintsPage() {
       setComplaints(result.complaints || []);
     } catch (err) {
       console.error("Failed to load complaints:", err);
-      setError(err.message || "Failed to load complaints");
+      setError(`Error: ${err.message || "Unknown"}. Raw: ${String(err)}`);
     } finally {
       setLoading(false);
     }
@@ -106,7 +106,11 @@ export default function ComplaintsPage() {
 
     // Sorting
     if (sortBy === "latest") {
-      arr.sort((a, b) => new Date(b.date_created) - new Date(a.date_created));
+      arr.sort((a, b) => {
+        const dateA = a.date_created ? new Date(a.date_created).getTime() : 0;
+        const dateB = b.date_created ? new Date(b.date_created).getTime() : 0;
+        return dateB - dateA;
+      });
     } else if (sortBy === "upvotes") {
       arr.sort((a, b) => (b.upvotes || 0) - (a.upvotes || 0));
     }

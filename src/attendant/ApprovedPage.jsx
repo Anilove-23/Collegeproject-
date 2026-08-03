@@ -56,6 +56,14 @@ export default function ApprovedPage() {
       setError("");
 
       const result = await apiFetch(
+        `/api/students/hostel-status?page=${currentPage}&limit=${limit}`,
+        {
+          method: "POST",
+          body: JSON.stringify({
+            outp_status: "Approved",
+          }),
+        }
+      );
   `/api/students/hostel-status?page=${currentPage}&limit=${limit}`,
   {
     method: "POST",
