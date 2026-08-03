@@ -36,15 +36,14 @@ import ComplaintsPage from "./attendant/ComplaintsPage";
 import Admin from "./admin/admin";
 
 /* ================= GUARD ================= */
-import GuardLayout from "./guard/GuardLayout";
-import Dashboard from "./guard/Dashboard";
-
-import GateLogs from "./guard/GateLogs";
-import ChiefWardenAllocationPage from "./chief-warden/chief-warden";
+import GuardLayout from "./guard/GuardLayout.jsx";
+import Dashboard from "./guard/Dashboard.jsx";
+import GateLogs from "./guard/GateLogs.jsx";
+import DayScholar from "./guard/DayScholar.jsx";
+import ChiefWardenAllocationPage from "./chief-warden/chief-warden.tsx";
 import Warden from "./warden/warden";
 
 /* ================= LOGS ================= */
-import LogsPage from "./logs/LogsPage";
 
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
@@ -167,7 +166,11 @@ const router = createBrowserRouter([
         path: "logs",
         element: <GateLogs />,
       },
-      
+      {
+        path: "dayscholar",
+        element: <DayScholar />,
+      },
+
     ],
   },
   ...parsedAllocationRoutes,
@@ -186,11 +189,7 @@ const router = createBrowserRouter([
     element: <Warden />,
     errorElement: <ErrorPage />,
   },
-  {
-    path: "/logs",
-    element: <LogsPage />,
-    errorElement: <ErrorPage />,
-  },
+
   {
     path: "*",
     element: <ErrorPage />,

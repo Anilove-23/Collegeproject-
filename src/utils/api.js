@@ -38,8 +38,8 @@ export async function apiFetch(
   /* ================= AUTO LOGOUT ================= */
 
   if (
-    response.status === 401 ||
-    response.status === 403
+    (response.status === 401 || response.status === 403) &&
+    !endpoint.includes('/login') && !endpoint.includes('/verify-otp')
   ) {
     localStorage.clear();
     window.location.href =

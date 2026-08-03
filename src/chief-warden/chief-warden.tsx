@@ -75,8 +75,9 @@ function Warden() {
 
   const [outpasses, setOutpasses] = useState<Outpass[]>([]);
   const [complaints, setComplaints] = useState<Complaint[]>([]);
+  const [escalatedComplaints, setEscalatedComplaints] = useState<Complaint[]>([]);
   const [lateLogs, setLateLogs] = useState<LateLog[]>([]);
-  const [activeTab, setActiveTab] = useState<"outpasses" | "complaints" | "lateLogs">("outpasses");
+  const [activeTab, setActiveTab] = useState<"outpasses" | "complaints" | "escalated" | "lateLogs">("outpasses");
 
   const [hostels, setHostels] = useState<Hostel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -134,9 +135,32 @@ function Warden() {
   useEffect(() => {
     fetchDashboard();
     fetchComplaints();
+    fetchEscalatedComplaints();
     fetchHostels();
     fetchLateLogs();
   }, []);
+
+  /* ================= FETCH ESCALATED COMPLAINTS ================= */
+  async function fetchEscalatedComplaints() {
+    try {
+      const response: any = await apiFetch("/complaint/escalated");
+
+      const list = Array.isArray(response)
+        ? response
+        : Array.isArray(response?.complaints)
+        ? response.complaints
+        : Array.isArray(response?.data)
+        ? response.data
+        : Array.isArray(response?.data?.complaints)
+        ? response.data.complaints
+        : [];
+
+      setEscalatedComplaints(list);
+    } catch (err) {
+      console.error("ESCALATED COMPLAINT FETCH ERROR:", err);
+      setEscalatedComplaints([]);
+    }
+  }
 
   /* ================= FETCH DASHBOARD ================= */
 
@@ -342,6 +366,32 @@ function Warden() {
     });
   }, [complaints, search, hostelFilter, selectedDate]);
 
+  /* ================= FILTER & PAGINATE ESCALATED COMPLAINTS ================= */
+
+  const filteredEscalated = useMemo(() => {
+    const safeComplaints = Array.isArray(escalatedComplaints) ? escalatedComplaints : [];
+
+    return safeComplaints.filter((comp: Complaint) => {
+      const q = search.toLowerCase().trim();
+
+      const matchesSearch =
+        !q ||
+        comp.student_name?.toLowerCase().includes(q) ||
+        comp.student_roll_no?.toLowerCase().includes(q) ||
+        comp.title?.toLowerCase().includes(q) ||
+        comp.description?.toLowerCase().includes(q);
+
+      const matchesHostel =
+        hostelFilter === "All" || comp.hostel === hostelFilter;
+
+      const matchesDate =
+        !selectedDate ||
+        (comp.date_created && comp.date_created.startsWith(selectedDate));
+
+      return matchesSearch && matchesHostel && matchesDate;
+    });
+  }, [escalatedComplaints, search, hostelFilter, selectedDate]);
+
   /* ================= FILTER & PAGINATE LATE LOGS (TIME RANGE) ================= */
 
   const filteredLateLogs = useMemo(() => {
@@ -377,6 +427,7 @@ function Warden() {
         std_status: pass.std_status,
         created_at: pass.created_at,
         outpass_type: pass.outpass_type,
+        student_id: pass.student_id,
       }));
 
     const mergedMap = new Map<string, LateLog>();
@@ -482,6 +533,8 @@ function Warden() {
       ? filteredOutpasses.length
       : activeTab === "complaints"
       ? filteredComplaints.length
+      : activeTab === "escalated"
+      ? filteredEscalated.length
       : filteredLateLogs.length;
 
   const totalPages = Math.ceil(activeListLength / limit) || 1;
@@ -496,12 +549,17 @@ function Warden() {
     return filteredComplaints.slice(start, start + limit);
   }, [filteredComplaints, page, limit]);
 
+  const paginatedEscalated = useMemo(() => {
+    const start = (page - 1) * limit;
+    return filteredEscalated.slice(start, start + limit);
+  }, [filteredEscalated, page, limit]);
+
   const paginatedLateLogs = useMemo(() => {
     const start = (page - 1) * limit;
     return filteredLateLogs.slice(start, start + limit);
   }, [filteredLateLogs, page, limit]);
 
-  const handleTabSwitch = (tab: "outpasses" | "complaints" | "lateLogs") => {
+  const handleTabSwitch = (tab: "outpasses" | "complaints" | "escalated" | "lateLogs") => {
     setActiveTab(tab);
     setPage(1);
   };
@@ -605,7 +663,7 @@ function Warden() {
               </select>
             )}
 
-            {activeTab !== "complaints" && (
+            {activeTab !== "complaints" && activeTab !== "escalated" && (
               <select
                 value={campusFilter}
                 onChange={(e) =>
@@ -739,6 +797,17 @@ function Warden() {
             }`}
           >
             Complaints ({filteredComplaints.length})
+          </button>
+
+          <button
+            onClick={() => handleTabSwitch("escalated")}
+            className={`px-6 py-3 rounded-2xl text-xs font-bold transition shadow-xs cursor-pointer flex items-center gap-1.5 ${
+              activeTab === "escalated"
+                ? "bg-[#6d0f16] text-white"
+                : "bg-white border border-gray-200 text-gray-600 hover:bg-gray-50"
+            }`}
+          >
+            Problems Not Resolved
           </button>
 
           <button
@@ -945,6 +1014,106 @@ function Warden() {
                         </td>
                       </tr>
                     ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ================= ESCALATED COMPLAINTS TABLE ================= */}
+
+        {activeTab === "escalated" && (
+          <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-200/80 flex justify-between items-center">
+              <h2 className="text-lg font-bold text-[#6d0f16]">
+                Problems Not Resolved
+              </h2>
+              <span className="text-xs font-semibold text-gray-500">
+                {filteredEscalated.length} High Priority
+              </span>
+            </div>
+
+            {filteredEscalated.length === 0 ? (
+              <div className="p-16 text-center text-gray-400 font-medium">
+                No unresolved problems. All good!
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm text-left">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
+                    <tr>
+                      <th className="px-6 py-3.5">Student</th>
+                      <th className="px-6 py-3.5">Hostel</th>
+                      <th className="px-6 py-3.5">Complaint</th>
+                      <th className="px-6 py-3.5">Status</th>
+                      <th className="px-6 py-3.5">Date Raised</th>
+                    </tr>
+                  </thead>
+
+                  <tbody className="divide-y divide-gray-100">
+                    {paginatedEscalated.map((comp: Complaint) => {
+                      const daysOld = Math.floor((new Date().getTime() - new Date(comp.date_created).getTime()) / (1000 * 3600 * 24));
+                      
+                      return (
+                      <tr
+                        key={comp.id}
+                        className="hover:bg-gray-50/80 transition bg-white"
+                      >
+                        <td className="px-6 py-4">
+                          <div>
+                            <h3 
+                              className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
+                              onClick={() => fetchStudentHistory(comp.student_id || '')}
+                            >
+                              {comp.student_name || "-"}
+                            </h3>
+                            <p className="text-xs text-gray-400">
+                              {comp.student_roll_no || "-"}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4 text-xs font-bold text-gray-700">
+                          {comp.hostel || "-"}
+                        </td>
+
+                        <td className="px-6 py-4 max-w-md">
+                          <div>
+                            <p className="font-semibold text-gray-800 text-sm">
+                              {comp.title || "Complaint"}
+                            </p>
+                            <p className="text-xs text-gray-500 mt-1 line-clamp-2">
+                              {comp.description}
+                            </p>
+                          </div>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <span
+                            className="text-[11px] px-3 py-1 rounded-full font-bold border bg-red-100 text-red-800 border-red-200"
+                          >
+                            Unresolved
+                          </span>
+                        </td>
+
+                        <td className="px-6 py-4">
+                          <div className="flex flex-col">
+                            <span className="text-sm font-semibold text-gray-800">
+                              {comp.date_created
+                                ? new Date(comp.date_created).toLocaleDateString(
+                                    "en-IN", { month: "short", day: "numeric", year: "numeric" }
+                                  )
+                                : "-"}
+                            </span>
+                            <span className="text-[10px] text-red-600 font-bold uppercase mt-1">
+                              {daysOld} Days Overdue
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>

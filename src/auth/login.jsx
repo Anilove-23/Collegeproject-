@@ -20,7 +20,7 @@ function Login() {
   const inferRole = (role, emailValue) => {
     const normalizedEmail = String(emailValue || "").toLowerCase();
 
-    if (normalizedEmail.includes("attendant")) return "attendant";
+    if (normalizedEmail.includes("attendant") || normalizedEmail.includes("att_")) return "attendant";
     if (normalizedEmail.includes("chief")) return "chief-warden";
     if (normalizedEmail.includes("warden")) return "warden";
     if (normalizedEmail.includes("guard")) return "guard";
@@ -31,29 +31,29 @@ function Login() {
 
   /* ================= REDIRECT ================= */
 
- const getRedirectPath = (role) => {
+  const getRedirectPath = (role) => {
 
-  switch (role) {
+    switch (role) {
 
-    case "student":
-      return "/student";
+      case "student":
+        return "/student";
 
-    case "attendant":
-      return "/attendant";
+      case "attendant":
+        return "/attendant";
 
-    case "guard":
-      return "/guard";
+      case "guard":
+        return "/guard";
 
-    case "warden":
-      return "/warden";
+      case "warden":
+        return "/warden";
 
-    case "chief-warden":
-      return "/chief-warden";
+      case "chief-warden":
+        return "/chief-warden";
 
-    default:
-      return "/student";
-  }
-};
+      default:
+        return "/student";
+    }
+  };
 
   /* ================= STATE ================= */
 
@@ -96,15 +96,15 @@ function Login() {
   }, [otpPending, otpCountdown]);
 
   /* ================= HANDLE CHANGE ================= */
-  
+
   const getMachineId = () => {
-  let machineId = localStorage.getItem('GATE_MACHINE_ID');
-  if (!machineId) {
-    machineId = 'GATE_MAC_' + crypto.randomUUID();
-    localStorage.setItem('GATE_MACHINE_ID', machineId);
-  }
-  return machineId;
-};
+    let machineId = localStorage.getItem('GATE_MACHINE_ID');
+    if (!machineId) {
+      machineId = 'GATE_MAC_' + crypto.randomUUID();
+      localStorage.setItem('GATE_MACHINE_ID', machineId);
+    }
+    return machineId;
+  };
   const handleChange = (e) => {
     if (e.target.name === "email" || e.target.name === "password") {
       setOtpPending(false);
@@ -187,7 +187,7 @@ function Login() {
 
       if (
         !formData.email ||
-        !formData.password 
+        !formData.password
       ) {
 
         setError(
@@ -233,7 +233,7 @@ function Login() {
       setError("");
 
       const data =
-        (await apiFetch("/api/auth/verify-login-otp", {
+        (await apiFetch("/api/auth/verify-otp", {
           method: "POST",
           body: JSON.stringify({
             email: formData.email,
