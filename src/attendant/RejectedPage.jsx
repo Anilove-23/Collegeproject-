@@ -47,7 +47,7 @@ setError("");
 
 const result=await apiFetch(
 
-`/api/students/status?page=${currentPage}&limit=${limit}`,
+`/api/students/hostel-status?page=${currentPage}&limit=${limit}`,
 
 {
 method:"POST",
