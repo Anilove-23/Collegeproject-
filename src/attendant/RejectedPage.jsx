@@ -110,6 +110,23 @@ setLoading(false);
 
 }
 
+async function handleView(outpass) {
+    try {
+        const result = await apiFetch(
+            `/api/students/outpass/${outpass.outpass_id}`
+        );
+
+        setSelected(result.data);
+
+    } catch (err) {
+        console.error(err);
+        alert(
+            err.message ||
+            "Failed to fetch outpass details"
+        );
+    }
+}
+
 useEffect(()=>{
 
 fetchRejected(page);
@@ -224,7 +241,7 @@ if(error){
 
 return(
 
-<div className="p-8">
+<div className="p-4 sm:p-8">
 
 <div className="border border-red-200 bg-red-50 rounded-xl p-4 text-red-600">
 
@@ -239,7 +256,7 @@ return(
 }
 return (
 
-<div className="p-6 space-y-5">
+<div className="p-4 sm:p-6 space-y-5">
 
 {/* ================= HEADER ================= */}
 
@@ -247,7 +264,7 @@ return (
 
 <div>
 
-<h1 className="text-3xl font-bold text-red-700">
+<h1 className="text-2xl md:text-3xl font-bold text-red-700">
 
 Rejected Outpasses
 
@@ -261,18 +278,18 @@ Review previously rejected hostel requests
 
 </div>
 
-<div className="flex gap-3">
+<div className="flex flex-col sm:flex-row gap-3">
 
 <button
 onClick={()=>fetchRejected(page)}
-className="border rounded-lg px-4 py-2 text-sm bg-white hover:bg-gray-50"
+className="w-full sm:w-auto border rounded-lg px-4 py-2 text-sm bg-white hover:bg-gray-50"
 >
 
 Refresh
 
 </button>
 
-<div className="bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">
+<div className="w-full sm:w-auto text-center bg-red-700 text-white px-5 py-2 rounded-lg text-sm font-semibold">
 
 Rejected : {pagination.total}
 
@@ -284,7 +301,7 @@ Rejected : {pagination.total}
 
 {/* ================= STATS ================= */}
 
-<div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+<div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
 
 <StatCard
 title="Rejected"
@@ -312,7 +329,7 @@ value={processed.length}
 
 <div className="bg-white rounded-2xl border shadow-sm p-4">
 
-<div className="grid lg:grid-cols-4 gap-3">
+<div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
 
 <input
 value={search}
@@ -355,7 +372,7 @@ Departure Time
 
 </select>
 
-<div className="flex items-center justify-end text-sm text-gray-500">
+<div className="flex items-center justify-start sm:justify-end text-sm text-gray-500">
 
 Showing
 
@@ -385,7 +402,7 @@ records
 
 <div className="bg-white border rounded-2xl shadow-sm overflow-x-auto">
 
-<table className="w-full">
+<table className="min-w-[1000px] w-full">
 
 <thead className="bg-gray-50 border-b">
 
@@ -517,7 +534,7 @@ className="border-b hover:bg-gray-50 transition"
 
 </td>
 
-<td className="px-5 py-4 text-sm">
+<td className="px-5 py-4 text-sm whitespace-nowrap">
 
 {new Date(
 o.departure_datetime
@@ -525,7 +542,7 @@ o.departure_datetime
 
 </td>
 
-<td className="px-5 py-4 text-sm text-gray-500">
+<td className="px-5 py-4 text-sm text-gray-500 whitespace-nowrap">
 
 {new Date(
 o.updated_at
@@ -533,7 +550,7 @@ o.updated_at
 
 </td>
 
-<td className="px-5 py-4 text-center">
+<td className="px-5 py-4 text-center whitespace-nowrap">
 
 <span className="px-3 py-1 rounded-full bg-red-100 text-red-700 text-xs font-medium">
 
@@ -543,13 +560,13 @@ Rejected
 
 </td>
 
-<td className="px-5 py-4">
+<td className="px-5 py-4 whitespace-nowrap">
 
 <div className="flex justify-center">
 
 <button
-onClick={()=>setSelected(o)}
-className="px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm"
+onClick={() => handleView(o)}
+className="w-full sm:w-auto px-4 py-2 border rounded-lg hover:bg-gray-100 text-sm"
 >
 
 View
@@ -608,14 +625,14 @@ View
 
   </div>
 
-  <div className="flex items-center gap-2">
+  <div className="flex flex-wrap justify-center gap-2">
 
     <button
       disabled={!pagination.hasPrevPage}
       onClick={() =>
         setPage(page - 1)
       }
-      className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full sm:w-auto px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
     >
 
       Previous
@@ -660,7 +677,7 @@ View
       onClick={() =>
         setPage(page + 1)
       }
-      className="px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+      className="w-full sm:w-auto px-4 py-2 border rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
     >
 
       Next
@@ -676,7 +693,8 @@ View
 {selected && (
 
   <OutpassModal
-    outpass={selected}
+    outpass={selected?.outpass}
+    remarks={selected?.remarks}
     onClose={() =>
       setSelected(null)
     }
@@ -702,7 +720,7 @@ value,
 
 return(
 
-<div className="bg-white border rounded-2xl shadow-sm p-5">
+<div className="bg-white border rounded-2xl shadow-sm p-5 w-full">
 
 <p className="text-xs uppercase tracking-wide text-gray-500">
 

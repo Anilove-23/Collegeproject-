@@ -12,9 +12,15 @@ interface Hostel {
   name?: string;
 }
 
+interface Remark {
+  id: string;
+  text: string;
+  author: string;
+  created_at: string;
+}
+
 interface Outpass {
   id: string;
-  student_id: string;
   name: string;
   roll_no: string;
   phone: string;
@@ -27,6 +33,17 @@ interface Outpass {
   created_at: string;
   departure_datetime?: string;
   arrival_datetime?: string;
+  // Optional / extended fields - render "-" gracefully if the API doesn't send them yet.
+  // Some of these only arrive once we fetch GET /api/chief-warden/outpasses/:id (the
+  // monitor list endpoint returns a lighter-weight record).
+  room?: string;
+  email?: string;
+  purpose?: string;
+  parent_contact?: string;
+  approved_at?: string;
+  is_emergency?: boolean;
+  // Needed to call GET /api/students/:id/history. Falls back to roll_no if absent.
+  student_id?: string;
 }
 
 interface Complaint {
@@ -59,16 +76,342 @@ interface LateLog {
   outpass_type?: string;
 }
 
-interface StudentHistory {
-  profile: any;
+interface StudentProfile {
+  id?: string;
+  name?: string;
+  roll_no?: string;
+  department?: string;
+  hostel?: string;
+  room?: string;
+  phone?: string;
+  email?: string;
+  parent_contact?: string;
+  [key: string]: any;
+}
+
+interface StudentHistoryResult {
+  profile: StudentProfile;
   outpasses: Outpass[];
-  visit_logs: any[];
+  visit_logs: LateLog[];
   complaints: Complaint[];
+}
+
+type QuickFilterKey =
+  | "All"
+  | "Today"
+  | "Yesterday"
+  | "Emergency"
+  | "Local"
+  | "Home"
+  | "Outstation"
+  | "OutsideCampus"
+  | "ReturnedToday";
+
+/* ================= SMALL HELPERS ================= */
+
+function isSameDay(dateStr?: string, ref?: Date) {
+  if (!dateStr || !ref) return false;
+  const d = new Date(dateStr);
+  return (
+    d.getFullYear() === ref.getFullYear() &&
+    d.getMonth() === ref.getMonth() &&
+    d.getDate() === ref.getDate()
+  );
+}
+
+function safeDate(dateStr?: string) {
+  if (!dateStr) return "-";
+  try {
+    return new Date(dateStr).toLocaleString("en-IN", {
+      dateStyle: "medium",
+      timeStyle: "short",
+    });
+  } catch {
+    return "-";
+  }
+}
+
+/* ================= HIGHLIGHT MATCHED SEARCH TEXT ================= */
+
+function HighlightText({ text, query }: { text?: string; query: string }) {
+  if (!text) return <>-</>;
+  const q = query.trim();
+  if (!q) return <>{text}</>;
+
+  const lower = text.toLowerCase();
+  const qLower = q.toLowerCase();
+  const idx = lower.indexOf(qLower);
+
+  if (idx === -1) return <>{text}</>;
+
+  const before = text.slice(0, idx);
+  const match = text.slice(idx, idx + q.length);
+  const after = text.slice(idx + q.length);
+
+  return (
+    <>
+      {before}
+      <mark className="bg-amber-200/70 text-gray-900 rounded px-0.5">
+        {match}
+      </mark>
+      {after}
+    </>
+  );
+}
+
+/* ================= STATUS PILL ================= */
+
+function StatusPill({ pass }: { pass: Outpass }) {
+  let label = "Rejected";
+  let className = "bg-red-100 text-red-800 border-red-200/60";
+
+  if (pass.std_status === "Out") {
+    label = "Outside Campus";
+    className = "bg-orange-100 text-orange-800 border-orange-200/60";
+  } else if (pass.std_status === "In" && pass.outp_status === "Approved") {
+    label = "Returned";
+    className = "bg-blue-100 text-blue-800 border-blue-200/60";
+  } else if (pass.outp_status === "Approved") {
+    label = "Approved";
+    className = "bg-green-100 text-green-800 border-green-200/60";
+  } else if (pass.outp_status === "Pending") {
+    label = "Pending";
+    className = "bg-amber-100 text-amber-800 border-amber-200/60";
+  }
+
+  return (
+    <span
+      className={`inline-block text-[11px] px-3 py-1 rounded-full font-semibold border ${className}`}
+    >
+      {label}
+    </span>
+  );
+}
+
+function EmergencyBadge() {
+  return (
+    <span className="inline-flex items-center gap-1 text-[10px] px-2.5 py-1 rounded-full font-bold border-2 border-red-500 text-red-600 bg-white ml-1.5">
+      ⚡ Emergency
+    </span>
+  );
+}
+
+/* ================= STAT CARD ================= */
+
+function StatCard({
+  label,
+  value,
+  icon,
+  accent,
+}: {
+  label: string;
+  value: number;
+  icon: string;
+  accent: string;
+}) {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 flex items-center gap-3 transition-all duration-300 hover:shadow-md hover:-translate-y-0.5">
+      <div
+        className="w-11 h-11 rounded-xl flex items-center justify-center text-lg shrink-0"
+        style={{ backgroundColor: `${accent}1a`, color: accent }}
+      >
+        <span>{icon}</span>
+      </div>
+      <div className="min-w-0">
+        <p className="text-[11px] font-bold uppercase tracking-wider text-gray-400 truncate">
+          {label}
+        </p>
+        <p
+          className="text-2xl font-extrabold tabular-nums transition-all duration-500"
+          style={{ color: accent }}
+        >
+          {value}
+        </p>
+      </div>
+    </div>
+  );
+}
+
+/* ================= FILTER CHIP ================= */
+
+function FilterChip({
+  label,
+  active,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`px-3.5 py-1.5 rounded-full text-[11px] font-bold border transition cursor-pointer whitespace-nowrap ${
+        active
+          ? "bg-[#6d0f16] text-white border-[#6d0f16]"
+          : "bg-white text-gray-600 border-gray-200 hover:border-[#6d0f16]/40 hover:text-[#6d0f16]"
+      }`}
+    >
+      {label}
+    </button>
+  );
+}
+
+/* ================= EMPTY STATE ================= */
+
+function EmptyState({
+  title,
+  message,
+  actionLabel,
+  onAction,
+}: {
+  title: string;
+  message: string;
+  actionLabel?: string;
+  onAction?: () => void;
+}) {
+  return (
+    <div className="p-16 flex flex-col items-center justify-center text-center gap-3">
+      <div className="w-16 h-16 rounded-2xl bg-[#6d0f16]/5 flex items-center justify-center text-3xl">
+        🗂️
+      </div>
+      <h3 className="text-sm font-bold text-gray-700">{title}</h3>
+      <p className="text-xs text-gray-400 max-w-xs">{message}</p>
+      {actionLabel && onAction && (
+        <button
+          onClick={onAction}
+          className="mt-2 px-4 py-2 rounded-xl bg-[#6d0f16] text-white text-xs font-bold hover:bg-[#5a0c12] transition cursor-pointer"
+        >
+          {actionLabel}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ================= TABLE SKELETON ================= */
+
+function TableSkeleton({ rows = 6, cols = 7 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="w-full text-sm text-left">
+        <tbody className="divide-y divide-gray-100">
+          {Array.from({ length: rows }).map((_, r) => (
+            <tr key={r}>
+              {Array.from({ length: cols }).map((__, c) => (
+                <td key={c} className="px-6 py-4">
+                  <div
+                    className="h-3 rounded-full bg-gray-100 animate-pulse"
+                    style={{ width: c === 0 ? "70%" : "50%" }}
+                  />
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function StatCardSkeleton() {
+  return (
+    <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-4 flex items-center gap-3">
+      <div className="w-11 h-11 rounded-xl bg-gray-100 animate-pulse shrink-0" />
+      <div className="flex-1 space-y-2">
+        <div className="h-2.5 w-16 rounded-full bg-gray-100 animate-pulse" />
+        <div className="h-4 w-10 rounded-full bg-gray-100 animate-pulse" />
+      </div>
+    </div>
+  );
+}
+
+/* ================= GENERIC INLINE SKELETON (drawer / modals) ================= */
+
+function InlineSkeleton({ lines = 3 }: { lines?: number }) {
+  return (
+    <div className="space-y-2">
+      {Array.from({ length: lines }).map((_, i) => (
+        <div
+          key={i}
+          className="h-3 rounded-full bg-gray-100 animate-pulse"
+          style={{ width: `${82 - i * 12}%` }}
+        />
+      ))}
+    </div>
+  );
+}
+
+/* ================= GENERIC INLINE ERROR w/ RETRY ================= */
+
+function InlineError({
+  message,
+  onRetry,
+}: {
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 shadow-xs text-xs font-medium flex items-center justify-between gap-3">
+      <span>⚠️ {message}</span>
+      {onRetry && (
+        <button
+          onClick={onRetry}
+          className="px-3 py-1.5 rounded-lg bg-red-600 text-white text-[11px] font-bold hover:bg-red-700 transition cursor-pointer shrink-0"
+        >
+          Retry
+        </button>
+      )}
+    </div>
+  );
+}
+
+/* ================= TIMELINE ITEM ================= */
+
+function TimelineItem({
+  icon,
+  title,
+  timestamp,
+  description,
+  isLast,
+  accent,
+}: {
+  icon: string;
+  title: string;
+  timestamp?: string;
+  description?: string;
+  isLast?: boolean;
+  accent: string;
+}) {
+  return (
+    <div className="flex gap-3">
+      <div className="flex flex-col items-center">
+        <div
+          className="w-8 h-8 rounded-full flex items-center justify-center text-xs shrink-0 border-2"
+          style={{ backgroundColor: `${accent}1a`, borderColor: accent, color: accent }}
+        >
+          {icon}
+        </div>
+        {!isLast && <div className="w-px flex-1 bg-gray-200 my-1" />}
+      </div>
+      <div className={`pb-6 ${isLast ? "pb-0" : ""}`}>
+        <p className="text-xs font-bold text-gray-800">{title}</p>
+        {timestamp && (
+          <p className="text-[11px] text-gray-400 font-medium mt-0.5">
+            {safeDate(timestamp)}
+          </p>
+        )}
+        {description && (
+          <p className="text-xs text-gray-500 mt-1">{description}</p>
+        )}
+      </div>
+    </div>
+  );
 }
 
 /* ================= COMPONENT ================= */
 
-function Warden() {
+function ChiefWarden() {
   const navigate = useNavigate();
 
   /* ================= STATES ================= */
@@ -87,48 +430,45 @@ function Warden() {
   const [statusFilter, setStatusFilter] = useState("All");
   const [hostelFilter, setHostelFilter] = useState("All");
   const [campusFilter, setCampusFilter] = useState("All"); // "All", "Outside", "Inside"
-  
+
   /* ================= DYNAMIC TIME RANGE & DATE CONSTRAINTS ================= */
   const [fromTime, setFromTime] = useState("20:00"); // Start time (Default 8:00 PM)
   const [toTime, setToTime] = useState(""); // End time (Optional - Blank means end of day)
   const [selectedDate, setSelectedDate] = useState(""); // YYYY-MM-DD filter for specific date
 
+  /* ================= QUICK FILTER CHIPS ================= */
+  const [quickFilter, setQuickFilter] = useState<QuickFilterKey>("All");
+
   /* ================= PAGINATION STATE ================= */
   const [page, setPage] = useState(1);
   const limit = 8; // Items per page
 
-  /* ================= STUDENT HISTORY MODAL STATE ================= */
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [studentHistory, setStudentHistory] = useState<StudentHistory | null>(null);
-  const [loadingHistory, setLoadingHistory] = useState(false);
-  const [activeModalTab, setActiveModalTab] = useState<"profile" | "outpasses" | "logs" | "complaints">("profile");
+  /* ================= VIEW DETAILS DRAWER ================= */
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [drawerClosing, setDrawerClosing] = useState(false);
+  const [selectedOutpass, setSelectedOutpass] = useState<Outpass | null>(null);
 
-  // Fetch specific student history
-  const fetchStudentHistory = async (studentId: string | number) => {
-    if (!studentId) return;
-    setLoadingHistory(true);
-    setIsModalOpen(true);
-    setActiveModalTab("profile"); // default tab
-    try {
-      const response: any = await apiFetch(`/api/students/${studentId}/history`);
-      // apiFetch returns the raw 'data' directly or throws an error.
-      // Wait, let's check how other apiFetch calls handle it.
-      // Usually response is either the data array/object, or response.data.
-      const data = response?.data || response;
-      if (data) {
-        setStudentHistory(data);
-      } else {
-        alert("Failed to load student history: Invalid response format");
-        setIsModalOpen(false);
-      }
-    } catch (err: any) {
-      console.error(err);
-      alert("Failed to load student history: " + (err.message || "Unknown error"));
-      setIsModalOpen(false);
-    } finally {
-      setLoadingHistory(false);
-    }
-  };
+  /* ================= OUTPASS DETAIL FETCH (GET /api/chief-warden/outpasses/:id) =================
+     Backs both the drawer's extended fields (room, email, purpose, parent_contact,
+     approved_at) and the remarks list — the monitor list endpoint doesn't return
+     either, so we fetch on demand when the drawer or remarks modal opens. */
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState("");
+
+  /* ================= CHIEF WARDEN REMARKS MODAL ================= */
+  const [remarksModalOpen, setRemarksModalOpen] = useState(false);
+  const [remarksTarget, setRemarksTarget] = useState<Outpass | null>(null);
+  const [remarksText, setRemarksText] = useState("");
+  const [remarksByOutpass, setRemarksByOutpass] = useState<Record<string, Remark[]>>({});
+  const [remarkSaving, setRemarkSaving] = useState(false);
+  const REMARKS_MAX_LEN = 500;
+
+  /* ================= HISTORY MODAL (GET /api/students/:id/history) ================= */
+  const [historyModalOpen, setHistoryModalOpen] = useState(false);
+  const [historyTarget, setHistoryTarget] = useState<Outpass | null>(null);
+  const [historyResult, setHistoryResult] = useState<StudentHistoryResult | null>(null);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
 
   /* ================= FETCH ================= */
 
@@ -163,6 +503,7 @@ function Warden() {
   }
 
   /* ================= FETCH DASHBOARD ================= */
+  /* ================= FETCH DASHBOARD (GET /api/outpasses/monitor) ================= */
 
   async function fetchDashboard() {
     try {
@@ -170,7 +511,7 @@ function Warden() {
       setError("");
 
       const response: any = await apiFetch("/api/outpasses/monitor");
-      console.log("Warden Dashboard Raw Response:", response);
+      console.log("Chief Warden Dashboard Raw Response:", response);
 
       const list = Array.isArray(response)
         ? response
@@ -192,7 +533,7 @@ function Warden() {
     }
   }
 
-  /* ================= FETCH COMPLAINTS ================= */
+  /* ================= FETCH COMPLAINTS (main tab list) ================= */
 
   async function fetchComplaints() {
     try {
@@ -236,7 +577,7 @@ function Warden() {
     }
   }
 
-  /* ================= FETCH LATE LOGS ================= */
+  /* ================= FETCH LATE LOGS (GET /api/outpasses/late-returns) ================= */
 
   async function fetchLateLogs() {
     try {
@@ -257,6 +598,140 @@ function Warden() {
     }
   }
 
+  /* ================= OUTPASS DETAIL: GET /api/chief-warden/outpasses/:id =================
+     Returns { outpass, remarks }. Used by the drawer and the remarks modal. */
+
+  async function fetchOutpassDetail(id: string) {
+    try {
+      setDetailLoading(true);
+      setDetailError("");
+
+      const response: any = await apiFetch(`/api/chief-warden/outpasses/${id}`);
+
+      const outpassData: Outpass | null =
+        response?.outpass || response?.data?.outpass || null;
+      const remarksData: Remark[] = Array.isArray(response?.remarks)
+        ? response.remarks
+        : Array.isArray(response?.data?.remarks)
+        ? response.data.remarks
+        : [];
+
+      if (outpassData) {
+        setSelectedOutpass((prev) =>
+          prev && prev.id === id ? { ...prev, ...outpassData } : prev
+        );
+      }
+
+      setRemarksByOutpass((prev) => ({ ...prev, [id]: remarksData }));
+    } catch (err: any) {
+      console.error("OUTPASS DETAIL FETCH ERROR:", err);
+      setDetailError(err?.message || "Failed to load outpass details");
+    } finally {
+      setDetailLoading(false);
+    }
+  }
+
+  /* ================= SAVE CHIEF WARDEN REMARK: POST /api/chief-warden/outpasses/:id/remarks ================= */
+
+  async function saveRemark() {
+  if (!remarksTarget) return;
+
+  const trimmedRemark = remarksText.trim();
+
+  if (!trimmedRemark) {
+    setDetailError("Remark cannot be empty");
+    return;
+  }
+
+  try {
+    setRemarkSaving(true);
+    setDetailError("");
+
+    const response: any = await apiFetch(
+      `/api/chief-warden/outpasses/${remarksTarget.id}/remarks`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          remark: trimmedRemark,
+        }),
+      }
+    );
+
+    const savedRemark =
+      response?.data?.remark ??
+      response?.remark ??
+      response?.data ??
+      null;
+
+    if (!savedRemark) {
+      throw new Error("Invalid response from server");
+    }
+
+    setRemarksByOutpass((prev) => ({
+      ...prev,
+      [remarksTarget.id]: [
+        ...(prev[remarksTarget.id] || []),
+        savedRemark,
+      ],
+    }));
+
+    setRemarksText("");
+    setRemarksModalOpen(false);
+  } catch (err: any) {
+    console.error("REMARK SAVE ERROR:", err);
+    setDetailError(err?.message || "Failed to save remark");
+  } finally {
+    setRemarkSaving(false);
+  }
+}
+  /* ================= STUDENT HISTORY: GET /api/students/:id/history =================
+     Returns { profile, outpasses, visit_logs, complaints }. */
+
+  async function fetchStudentHistory(studentId: string) {
+    if (!studentId) {
+      setHistoryError("This record has no student identifier to look up.");
+      setHistoryResult(null);
+      return;
+    }
+
+    try {
+      setHistoryLoading(true);
+      setHistoryError("");
+
+      const response: any = await apiFetch(`/api/students/${studentId}/history`);
+
+      const data: StudentHistoryResult = {
+        profile: response?.profile || response?.data?.profile || {},
+        outpasses: Array.isArray(response?.outpasses)
+          ? response.outpasses
+          : Array.isArray(response?.data?.outpasses)
+          ? response.data.outpasses
+          : [],
+        visit_logs: Array.isArray(response?.visit_logs)
+          ? response.visit_logs
+          : Array.isArray(response?.data?.visit_logs)
+          ? response.data.visit_logs
+          : [],
+        complaints: Array.isArray(response?.complaints)
+          ? response.complaints
+          : Array.isArray(response?.data?.complaints)
+          ? response.data.complaints
+          : [],
+      };
+
+      setHistoryResult(data);
+    } catch (err: any) {
+      console.error("STUDENT HISTORY FETCH ERROR:", err);
+      setHistoryError(err?.message || "Failed to load student history");
+      setHistoryResult(null);
+    } finally {
+      setHistoryLoading(false);
+    }
+  }
+
   /* ================= LOGOUT ================= */
 
   function logout() {
@@ -274,40 +749,77 @@ function Warden() {
     return `${displayHour}:${displayMin} ${period}`;
   }
 
-  /* ================= STATUS ================= */
+  /* ================= DRAWER / MODAL HANDLERS ================= */
 
-  function getStatus(pass: Outpass) {
-    if (pass.std_status === "Out") {
-      return {
-        label: "Outside Campus",
-        className: "bg-orange-100 text-orange-800 border-orange-200/60",
-      };
+  function openDrawer(pass: Outpass) {
+    setSelectedOutpass(pass);
+    setDrawerOpen(true);
+    setDrawerClosing(false);
+    setDetailError("");
+    fetchOutpassDetail(pass.id);
+  }
+
+  function closeDrawer() {
+    setDrawerClosing(true);
+    setTimeout(() => {
+      setDrawerOpen(false);
+      setDrawerClosing(false);
+      setSelectedOutpass(null);
+    }, 200);
+  }
+
+  function openRemarksModal(pass: Outpass) {
+    setRemarksTarget(pass);
+    setRemarksText("");
+    setRemarksModalOpen(true);
+    setDetailError("");
+    if (!remarksByOutpass[pass.id]) {
+      fetchOutpassDetail(pass.id);
     }
+  }
 
-    if (pass.outp_status === "Approved") {
-      return {
-        label: "Approved",
-        className: "bg-green-100 text-green-800 border-green-200/60",
-      };
+  function closeRemarksModal() {
+    setRemarksModalOpen(false);
+    setRemarksTarget(null);
+    setRemarksText("");
+  }
+
+  function openHistoryModal(pass: Outpass) {
+    setHistoryTarget(pass);
+    setHistoryModalOpen(true);
+    setHistoryResult(null);
+    setHistoryError("");
+    fetchStudentHistory(pass.student_id || pass.roll_no);
+  }
+
+  function closeHistoryModal() {
+    setHistoryModalOpen(false);
+    setHistoryTarget(null);
+    setHistoryResult(null);
+    setHistoryError("");
+  }
+
+  function retryHistory() {
+    if (historyTarget) {
+      fetchStudentHistory(historyTarget.student_id || historyTarget.roll_no);
     }
+  }
 
-    if (pass.outp_status === "Pending") {
-      return {
-        label: "Pending",
-        className: "bg-amber-100 text-amber-800 border-amber-200/60",
-      };
+  function retryDetail() {
+    if (selectedOutpass) {
+      fetchOutpassDetail(selectedOutpass.id);
+    } else if (remarksTarget) {
+      fetchOutpassDetail(remarksTarget.id);
     }
-
-    return {
-      label: "Rejected",
-      className: "bg-red-100 text-red-800 border-red-200/60",
-    };
   }
 
   /* ================= FILTER & PAGINATE OUTPASSES ================= */
 
   const filteredOutpasses = useMemo(() => {
     const safeOutpasses = Array.isArray(outpasses) ? outpasses : [];
+    const now = new Date();
+    const yesterday = new Date();
+    yesterday.setDate(now.getDate() - 1);
 
     return safeOutpasses.filter((pass: Outpass) => {
       const q = search.toLowerCase().trim();
@@ -336,9 +848,29 @@ function Warden() {
         (pass.departure_datetime && pass.departure_datetime.startsWith(selectedDate)) ||
         (pass.arrival_datetime && pass.arrival_datetime.startsWith(selectedDate));
 
-      return matchesSearch && matchesStatus && matchesHostel && matchesCampus && matchesDate;
+      const matchesQuick =
+        quickFilter === "All" ||
+        (quickFilter === "Today" && isSameDay(pass.created_at, now)) ||
+        (quickFilter === "Yesterday" && isSameDay(pass.created_at, yesterday)) ||
+        (quickFilter === "Emergency" && !!pass.is_emergency) ||
+        (quickFilter === "Local" && pass.outpass_type === "Local") ||
+        (quickFilter === "Home" && pass.outpass_type === "Home") ||
+        (quickFilter === "Outstation" && pass.outpass_type === "Outstation") ||
+        (quickFilter === "OutsideCampus" && pass.std_status === "Out") ||
+        (quickFilter === "ReturnedToday" &&
+          pass.std_status !== "Out" &&
+          isSameDay(pass.arrival_datetime, now));
+
+      return (
+        matchesSearch &&
+        matchesStatus &&
+        matchesHostel &&
+        matchesCampus &&
+        matchesDate &&
+        matchesQuick
+      );
     });
-  }, [outpasses, search, statusFilter, hostelFilter, campusFilter, selectedDate]);
+  }, [outpasses, search, statusFilter, hostelFilter, campusFilter, selectedDate, quickFilter]);
 
   /* ================= FILTER & PAGINATE COMPLAINTS ================= */
 
@@ -396,7 +928,7 @@ function Warden() {
 
   const filteredLateLogs = useMemo(() => {
     const safeLateLogs = Array.isArray(lateLogs) ? lateLogs : [];
-    
+
     // Parse From Time
     const [fromH, fromM] = fromTime.split(":").map(Number);
     const startMinutes = (fromH || 0) * 60 + (fromM || 0);
@@ -410,13 +942,14 @@ function Warden() {
         if (!pass.arrival_datetime) return false;
         const arrivalDate = new Date(pass.arrival_datetime);
         const totalMinutes = arrivalDate.getHours() * 60 + arrivalDate.getMinutes();
-        
+
         // Return time must fall between fromTime and toTime
         const fallsInWindow = totalMinutes >= startMinutes && totalMinutes <= endMinutes;
         return fallsInWindow || pass.std_status === "Out";
       })
       .map((pass: Outpass) => ({
         id: pass.id,
+        student_id: pass.student_id || pass.roll_no,
         name: pass.name,
         roll_no: pass.roll_no,
         department: pass.department,
@@ -464,6 +997,101 @@ function Warden() {
       return matchesSearch && matchesHostel && matchesCampus && matchesDate;
     });
   }, [lateLogs, outpasses, search, hostelFilter, campusFilter, fromTime, toTime, selectedDate]);
+
+  /* ================= STATISTICS ================= */
+
+  const stats = useMemo(() => {
+    const safeOutpasses = Array.isArray(outpasses) ? outpasses : [];
+    return {
+      total: safeOutpasses.length,
+      pending: safeOutpasses.filter((p) => p.outp_status === "Pending").length,
+      approved: safeOutpasses.filter((p) => p.outp_status === "Approved").length,
+      outside: safeOutpasses.filter((p) => p.std_status === "Out").length,
+      lateReturns: (Array.isArray(lateLogs) ? lateLogs : []).length,
+      complaintsCount: (Array.isArray(complaints) ? complaints : []).length,
+      emergency: safeOutpasses.filter((p) => !!p.is_emergency || p.outpass_type === "Emergency").length,
+    };
+  }, [outpasses, lateLogs, complaints]);
+
+  /* ================= TIMELINE FOR SELECTED OUTPASS ================= */
+
+  const timelineEvents = useMemo(() => {
+    if (!selectedOutpass) return [];
+
+    const events: {
+      icon: string;
+      title: string;
+      timestamp?: string;
+      description?: string;
+      accent: string;
+      sortKey: number;
+    }[] = [];
+
+    if (selectedOutpass.created_at) {
+      events.push({
+        icon: "📝",
+        title: "Outpass Created",
+        timestamp: selectedOutpass.created_at,
+        accent: "#6d0f16",
+        sortKey: new Date(selectedOutpass.created_at).getTime(),
+      });
+    }
+
+    if (selectedOutpass.outp_status === "Approved") {
+      const ts = selectedOutpass.approved_at || selectedOutpass.created_at;
+      events.push({
+        icon: "✅",
+        title: "Approved",
+        timestamp: ts,
+        accent: "#16a34a",
+        sortKey: ts ? new Date(ts).getTime() : 0,
+      });
+    } else if (selectedOutpass.outp_status === "Rejected") {
+      events.push({
+        icon: "❌",
+        title: "Rejected",
+        timestamp: selectedOutpass.approved_at || selectedOutpass.created_at,
+        accent: "#dc2626",
+        sortKey: new Date(
+          selectedOutpass.approved_at || selectedOutpass.created_at || 0
+        ).getTime(),
+      });
+    }
+
+    if (selectedOutpass.departure_datetime) {
+      events.push({
+        icon: "🚶",
+        title: "Student Exit",
+        timestamp: selectedOutpass.departure_datetime,
+        accent: "#ea580c",
+        sortKey: new Date(selectedOutpass.departure_datetime).getTime(),
+      });
+    }
+
+    if (selectedOutpass.arrival_datetime) {
+      events.push({
+        icon: "🏠",
+        title: "Student Return",
+        timestamp: selectedOutpass.arrival_datetime,
+        accent: "#2563eb",
+        sortKey: new Date(selectedOutpass.arrival_datetime).getTime(),
+      });
+    }
+
+    const remarks = remarksByOutpass[selectedOutpass.id] || [];
+    remarks.forEach((r) => {
+      events.push({
+        icon: "💬",
+        title: `Chief Warden Remark — ${r.author}`,
+        timestamp: r.created_at,
+        description: r.text,
+        accent: "#7c3aed",
+        sortKey: new Date(r.created_at).getTime(),
+      });
+    });
+
+    return events.sort((a, b) => a.sortKey - b.sortKey);
+  }, [selectedOutpass, remarksByOutpass]);
 
   /* ================= DOWNLOAD PDF REPORT ================= */
 
@@ -527,6 +1155,118 @@ function Warden() {
     doc.save(`Late_Returns_Report_${fileDate}.pdf`);
   };
 
+  /* ================= EXPORT CSV ================= */
+
+ const exportCSV = () => {
+  const headers = [
+    "Roll No",
+    "Student Name",
+    "Department",
+    "Hostel",
+    "Destination",
+    "Departure",
+    "Expected Arrival",
+    "Campus Status",
+  ];
+
+  const escapeCsv = (val: unknown): string =>
+    `"${String(val ?? "-").replace(/"/g, '""')}"`;
+
+  const rows = filteredLateLogs.map((item) =>
+    [
+      item.roll_no ?? "-",
+      item.name ?? "-",
+      item.department ?? "-",
+      item.hostel ?? "-",
+      item.place_of_visit ?? "-",
+      item.departure_datetime ? safeDate(item.departure_datetime) : "-",
+      item.arrival_datetime ? safeDate(item.arrival_datetime) : "-",
+      item.std_status === "Out" ? "Outside Campus" : "Inside Campus",
+    ]
+      .map((v) => escapeCsv(v))
+      .join(",")
+  );
+
+  const csvContent = [headers.map(escapeCsv).join(","), ...rows].join("\n");
+
+  const blob = new Blob([csvContent], {
+    type: "text/csv;charset=utf-8;",
+  });
+
+  const url = URL.createObjectURL(blob);
+
+  const link = document.createElement("a");
+
+  const fileDate = selectedDate || "All_Dates";
+
+  link.href = url;
+  link.download = `Late_Returns_Report_${fileDate}.csv`;
+
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+
+  URL.revokeObjectURL(url);
+};
+
+  /* ================= PRINT REPORT ================= */
+
+  const printReport = () => {
+    const rangeText = `${format12Hour(fromTime)} to ${toTime ? format12Hour(toTime) : "End of Day"}`;
+    const dateText = selectedDate || "All Dates";
+
+    const rowsHtml = filteredLateLogs
+      .map(
+        (item) => `
+        <tr>
+          <td>${item.roll_no || "-"}</td>
+          <td>${item.name || "-"}</td>
+          <td>${item.department || "-"}</td>
+          <td>${item.hostel || "-"}</td>
+          <td>${item.place_of_visit || "-"}</td>
+          <td>${item.departure_datetime ? safeDate(item.departure_datetime) : "-"}</td>
+          <td>${item.arrival_datetime ? safeDate(item.arrival_datetime) : "-"}</td>
+          <td>${item.std_status === "Out" ? "Outside Campus" : "Inside Campus"}</td>
+        </tr>`
+      )
+      .join("");
+
+    const printWindow = window.open("", "_blank");
+    if (!printWindow) return;
+
+    printWindow.document.write(`
+      <html>
+        <head>
+          <title>Late Returns & Movement Report</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; color: #1f2937; }
+            h1 { color: #6d0f16; font-size: 20px; margin-bottom: 4px; }
+            p.meta { color: #6b7280; font-size: 12px; margin-top: 0; margin-bottom: 20px; }
+            table { width: 100%; border-collapse: collapse; font-size: 12px; }
+            th { background: #6d0f16; color: #fff; text-align: left; padding: 8px; }
+            td { padding: 8px; border-bottom: 1px solid #e5e7eb; }
+            tr:nth-child(even) { background: #f9fafb; }
+          </style>
+        </head>
+        <body>
+          <h1>Late Returns & Movement Report</h1>
+          <p class="meta">Date: ${dateText} | Time Range: ${rangeText} | Hostel: ${hostelFilter}</p>
+          <table>
+            <thead>
+              <tr>
+                <th>Roll No</th><th>Student Name</th><th>Department</th><th>Hostel</th>
+                <th>Destination</th><th>Departure</th><th>Expected Arrival</th><th>Campus Status</th>
+              </tr>
+            </thead>
+            <tbody>${rowsHtml}</tbody>
+          </table>
+          <script>window.onload = () => { window.print(); };</script>
+        </body>
+      </html>
+    `);
+    printWindow.document.close();
+  };
+
   // Dynamic Pagination calculations based on Active Tab
   const activeListLength =
     activeTab === "outpasses"
@@ -569,16 +1309,46 @@ function Warden() {
     setPage(1);
   };
 
-  /* ================= LOADING ================= */
+  const quickFilterChips: { key: QuickFilterKey; label: string }[] = [
+    { key: "All", label: "All" },
+    { key: "Today", label: "Today" },
+    { key: "Yesterday", label: "Yesterday" },
+    { key: "Emergency", label: "Emergency" },
+    { key: "Local", label: "Local" },
+    { key: "Home", label: "Home" },
+    { key: "Outstation", label: "Outstation" },
+    { key: "OutsideCampus", label: "Outside Campus" },
+    { key: "ReturnedToday", label: "Returned Today" },
+  ];
+
+  /* ================= LOADING (SKELETON) ================= */
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-gray-50">
-        <div className="text-center">
-          <div className="w-12 h-12 border-4 border-[#6d0f16] border-t-transparent rounded-full animate-spin mx-auto"></div>
-          <p className="mt-4 text-gray-600 font-medium text-sm">
-            Loading Dashboard...
-          </p>
+      <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
+        <div className="bg-[#6d0f16] text-white px-8 py-4 shadow-md flex justify-between items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-10 h-10 rounded-lg bg-white/10 animate-pulse" />
+            <div className="space-y-2">
+              <div className="h-4 w-48 rounded-full bg-white/20 animate-pulse" />
+              <div className="h-2.5 w-64 rounded-full bg-white/10 animate-pulse" />
+            </div>
+          </div>
+        </div>
+
+        <div className="max-w-7xl mx-auto p-8 space-y-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+            {Array.from({ length: 7 }).map((_, i) => (
+              <StatCardSkeleton key={i} />
+            ))}
+          </div>
+
+          <div className="bg-white rounded-3xl border border-gray-200/80 shadow-sm overflow-hidden">
+            <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-200/80">
+              <div className="h-4 w-48 rounded-full bg-gray-100 animate-pulse" />
+            </div>
+            <TableSkeleton />
+          </div>
         </div>
       </div>
     );
@@ -588,7 +1358,7 @@ function Warden() {
     <div className="min-h-screen bg-gray-50 font-sans text-gray-800">
       {/* ================= NAVBAR ================= */}
 
-      <div className="bg-[#6d0f16] text-white px-8 py-4 shadow-md flex justify-between items-center">
+      <div className="bg-[#6d0f16] text-white px-4 md:px-8 py-4 shadow-md flex flex-wrap justify-between items-center gap-3">
         <div className="flex items-center gap-4">
           <img
             src="/l.png"
@@ -596,7 +1366,7 @@ function Warden() {
             className="w-10 h-10 object-contain brightness-200"
           />
           <div>
-            <h1 className="text-xl font-extrabold tracking-tight">
+            <h1 className="text-lg md:text-xl font-extrabold tracking-tight">
               Chief Warden Dashboard
             </h1>
             <p className="text-xs text-white/70">
@@ -605,16 +1375,32 @@ function Warden() {
           </div>
         </div>
 
-        <div className="flex items-center gap-3">
-          {/* DIRECT PDF DOWNLOAD BUTTON */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {/* EXPORT BUTTONS */}
           {activeTab === "lateLogs" && (
-            <button
-              onClick={downloadPDFReport}
-              disabled={filteredLateLogs.length === 0}
-              className="bg-white text-[#6d0f16] hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
-            >
-              📥 Download PDF Report
-            </button>
+            <>
+              <button
+                onClick={downloadPDFReport}
+                disabled={filteredLateLogs.length === 0}
+                className="bg-white text-[#6d0f16] hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                📥 PDF
+              </button>
+              <button
+                onClick={exportCSV}
+                disabled={filteredLateLogs.length === 0}
+                className="bg-white/10 hover:bg-white hover:text-[#6d0f16] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer border border-white/20"
+              >
+                📊 CSV
+              </button>
+              <button
+                onClick={printReport}
+                disabled={filteredLateLogs.length === 0}
+                className="bg-white/10 hover:bg-white hover:text-[#6d0f16] disabled:opacity-50 disabled:cursor-not-allowed px-4 py-2 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5 cursor-pointer border border-white/20"
+              >
+                🖨️ Print
+              </button>
+            </>
           )}
 
           <button
@@ -628,7 +1414,19 @@ function Warden() {
 
       {/* ================= CONTENT ================= */}
 
-      <div className="max-w-7xl mx-auto p-8 space-y-6">
+      <div className="max-w-7xl mx-auto p-4 md:p-8 space-y-6">
+        {/* ================= STATISTICS CARDS ================= */}
+
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+          <StatCard label="Total Outpasses" value={stats.total} icon="📋" accent="#6d0f16" />
+          <StatCard label="Pending" value={stats.pending} icon="⏳" accent="#d97706" />
+          <StatCard label="Approved" value={stats.approved} icon="✅" accent="#16a34a" />
+          <StatCard label="Outside Campus" value={stats.outside} icon="🚪" accent="#ea580c" />
+          <StatCard label="Late Returns" value={stats.lateReturns} icon="⏰" accent="#dc2626" />
+          <StatCard label="Complaints" value={stats.complaintsCount} icon="📢" accent="#2563eb" />
+          <StatCard label="Emergency" value={stats.emergency} icon="⚡" accent="#b91c1c" />
+        </div>
+
         {/* ================= FILTERS & TIME RANGE ================= */}
 
         <div className="bg-white rounded-3xl shadow-sm border border-gray-200/80 p-5 space-y-4">
@@ -700,6 +1498,20 @@ function Warden() {
               })}
             </select>
           </div>
+
+          {/* QUICK FILTER CHIPS */}
+          {activeTab === "outpasses" && (
+            <div className="flex flex-wrap gap-2 pt-1">
+              {quickFilterChips.map((chip) => (
+                <FilterChip
+                  key={chip.key}
+                  label={chip.label}
+                  active={quickFilter === chip.key}
+                  onClick={() => handleFilterChange(setQuickFilter, chip.key)}
+                />
+              ))}
+            </div>
+          )}
 
           {/* DYNAMIC TIME RANGE (FROM -> TO) & DATE PICKER */}
           <div className="pt-3 border-t border-gray-100 flex flex-wrap items-center justify-between gap-4">
@@ -824,11 +1636,7 @@ function Warden() {
 
         {/* ================= ERROR ================= */}
 
-        {error && (
-          <div className="bg-red-50 border border-red-200 text-red-700 rounded-2xl p-4 shadow-xs text-sm font-medium">
-            ⚠️ {error}
-          </div>
-        )}
+        {error && <InlineError message={error} onRetry={fetchDashboard} />}
 
         {/* ================= OUTPASS TABLE ================= */}
 
@@ -844,79 +1652,114 @@ function Warden() {
             </div>
 
             {filteredOutpasses.length === 0 ? (
-              <div className="p-16 text-center text-gray-400 font-medium">
-                No outpass records found matching criteria
-              </div>
+              <EmptyState
+                title="No outpass records found"
+                message="Try adjusting your filters or search terms, or clear them to see all records."
+                actionLabel="Clear Filters"
+                onAction={() => {
+                  setSearch("");
+                  setStatusFilter("All");
+                  setHostelFilter("All");
+                  setCampusFilter("All");
+                  setSelectedDate("");
+                  setQuickFilter("All");
+                }}
+              />
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[560px]">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3.5">Student</th>
-                      <th className="px-6 py-3.5">Department</th>
-                      <th className="px-6 py-3.5">Hostel</th>
-                      <th className="px-6 py-3.5">Destination</th>
-                      <th className="px-6 py-3.5">Type</th>
-                      <th className="px-6 py-3.5">Status</th>
-                      <th className="px-6 py-3.5">Date</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Student</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden md:table-cell">Department</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden lg:table-cell">Hostel</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden lg:table-cell">Destination</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden md:table-cell">Type</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Status</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden sm:table-cell">Date</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Actions</th>
                     </tr>
                   </thead>
 
                   <tbody className="divide-y divide-gray-100">
                     {paginatedOutpasses.map((pass: Outpass) => {
-                      const status = getStatus(pass);
+                      const isEmergency =
+                        !!pass.is_emergency || pass.outpass_type === "Emergency";
+                      const isSelected = selectedOutpass?.id === pass.id;
 
                       return (
                         <tr
                           key={pass.id}
-                          className="hover:bg-gray-50/80 transition"
+                          className={`transition-colors duration-150 ${
+                            isSelected ? "bg-[#6d0f16]/5" : "hover:bg-gray-50/80"
+                          }`}
                         >
                           <td className="px-6 py-4">
                             <div>
-                              <h3 
-                                className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
-                                onClick={() => fetchStudentHistory(pass.student_id || '')}
+                              <h3
+                                className="font-bold text-[#6d0f16] cursor-pointer hover:underline flex items-center flex-wrap"
+                                onClick={() => openHistoryModal(pass)}
                               >
-                                {pass.name}
+                                <HighlightText text={pass.name} query={search} />
+                                {isEmergency && <EmergencyBadge />}
                               </h3>
                               <p className="text-xs text-gray-400">
-                                {pass.roll_no}
+                                <HighlightText text={pass.roll_no} query={search} />
                               </p>
                             </div>
                           </td>
 
-                          <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                          <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden md:table-cell">
                             {pass.department || "-"}
                           </td>
 
-                          <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                          <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden lg:table-cell">
                             {pass.hostel || "-"}
                           </td>
 
-                          <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                          <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden lg:table-cell">
                             {pass.place_of_visit || "-"}
                           </td>
 
-                          <td className="px-6 py-4">
+                          <td className="px-6 py-4 hidden md:table-cell">
                             <span className="bg-gray-100 text-gray-700 text-[11px] px-3 py-1 rounded-full font-semibold">
                               {pass.outpass_type}
                             </span>
                           </td>
 
                           <td className="px-6 py-4">
-                            <span
-                              className={`text-[11px] px-3 py-1 rounded-full font-semibold border ${status.className}`}
-                            >
-                              {status.label}
-                            </span>
+                            <StatusPill pass={pass} />
                           </td>
 
-                          <td className="px-6 py-4 text-xs text-gray-500 font-medium">
+                          <td className="px-6 py-4 text-xs text-gray-500 font-medium hidden sm:table-cell">
                             {pass.created_at
                               ? new Date(pass.created_at).toLocaleDateString(
                                   "en-IN"
                                 )
                               : "-"}
+                          </td>
+
+                          <td className="px-6 py-4">
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <button
+                                onClick={() => openDrawer(pass)}
+                                className="px-2.5 py-1.5 rounded-lg bg-[#6d0f16]/5 text-[#6d0f16] text-[11px] font-bold hover:bg-[#6d0f16] hover:text-white transition cursor-pointer"
+                              >
+                                View
+                              </button>
+                              <button
+                                onClick={() => openRemarksModal(pass)}
+                                className="px-2.5 py-1.5 rounded-lg bg-blue-50 text-blue-700 text-[11px] font-bold hover:bg-blue-600 hover:text-white transition cursor-pointer"
+                              >
+                                Remarks
+                              </button>
+                              <button
+                                onClick={() => openHistoryModal(pass)}
+                                className="px-2.5 py-1.5 rounded-lg bg-gray-100 text-gray-700 text-[11px] font-bold hover:bg-gray-700 hover:text-white transition cursor-pointer"
+                              >
+                                History
+                              </button>
+                            </div>
                           </td>
                         </tr>
                       );
@@ -942,19 +1785,22 @@ function Warden() {
             </div>
 
             {filteredComplaints.length === 0 ? (
-              <div className="p-16 text-center text-gray-400 font-medium">
-                No complaints found matching criteria
-              </div>
+              <EmptyState
+                title="No complaints found"
+                message="Nothing matches your current search or filters."
+                actionLabel="Clear Search"
+                onAction={() => setSearch("")}
+              />
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[560px]">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3.5">Student</th>
-                      <th className="px-6 py-3.5">Hostel</th>
-                      <th className="px-6 py-3.5">Complaint</th>
-                      <th className="px-6 py-3.5">Status</th>
-                      <th className="px-6 py-3.5">Date</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Student</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden md:table-cell">Hostel</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Complaint</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Status</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden sm:table-cell">Date</th>
                     </tr>
                   </thead>
 
@@ -962,33 +1808,49 @@ function Warden() {
                     {paginatedComplaints.map((comp: Complaint) => (
                       <tr
                         key={comp.id}
-                        className="hover:bg-gray-50/80 transition"
+                        className="hover:bg-gray-50/80 transition-colors duration-150"
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 
+                            <h3
                               className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
-                              onClick={() => fetchStudentHistory(comp.student_id || '')}
+                              onClick={() =>
+                                comp.student_id &&
+                                openHistoryModal({
+                                  id: "",
+                                  student_id: comp.student_id,
+                                  name: comp.student_name || "",
+                                  roll_no: comp.student_roll_no || "",
+                                  phone: "",
+                                  department: comp.student_department || "",
+                                  hostel: comp.hostel,
+                                  place_of_visit: "",
+                                  outpass_type: "",
+                                  outp_status: "",
+                                  std_status: "",
+                                  created_at: "",
+                                } as Outpass)
+                              }
                             >
-                              {comp.student_name || "-"}
+                              <HighlightText text={comp.student_name} query={search} />
                             </h3>
                             <p className="text-xs text-gray-400">
-                              {comp.student_roll_no || "-"}
+                              <HighlightText text={comp.student_roll_no} query={search} />
                             </p>
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                        <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden md:table-cell">
                           {comp.hostel || "-"}
                         </td>
 
                         <td className="px-6 py-4 max-w-md">
                           <div>
                             <p className="font-semibold text-gray-800 text-xs">
-                              {comp.title || "Complaint"}
+                              <HighlightText text={comp.title || "Complaint"} query={search} />
                             </p>
                             <p className="text-xs text-gray-500 mt-0.5 line-clamp-2">
-                              {comp.description}
+                              <HighlightText text={comp.description} query={search} />
                             </p>
                           </div>
                         </td>
@@ -1005,7 +1867,7 @@ function Warden() {
                           </span>
                         </td>
 
-                        <td className="px-6 py-4 text-xs text-gray-500 font-medium">
+                        <td className="px-6 py-4 text-xs text-gray-500 font-medium hidden sm:table-cell">
                           {comp.date_created
                             ? new Date(comp.date_created).toLocaleDateString(
                                 "en-IN"
@@ -1140,21 +2002,22 @@ function Warden() {
             </div>
 
             {filteredLateLogs.length === 0 ? (
-              <div className="p-16 text-center text-gray-400 font-medium">
-                No late entries or overdue returns found for this time range
-              </div>
+              <EmptyState
+                title="No late entries found"
+                message="No overdue returns or movement logs for this time range yet."
+              />
             ) : (
-              <div className="overflow-x-auto">
+              <div className="overflow-x-auto max-h-[560px]">
                 <table className="w-full text-sm text-left">
-                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
+                  <thead className="bg-gray-50 text-xs uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100 sticky top-0 z-10">
                     <tr>
-                      <th className="px-6 py-3.5">Student</th>
-                      <th className="px-6 py-3.5">Hostel</th>
-                      <th className="px-6 py-3.5">Destination</th>
-                      <th className="px-6 py-3.5">Departure</th>
-                      <th className="px-6 py-3.5">Expected Return</th>
-                      <th className="px-6 py-3.5">Campus Status</th>
-                      <th className="px-6 py-3.5">Time Flag</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Student</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden md:table-cell">Hostel</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden lg:table-cell">Destination</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden lg:table-cell">Departure</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Expected Return</th>
+                      <th className="px-6 py-3.5 bg-gray-50">Campus Status</th>
+                      <th className="px-6 py-3.5 bg-gray-50 hidden sm:table-cell">Time Flag</th>
                     </tr>
                   </thead>
 
@@ -1162,31 +2025,47 @@ function Warden() {
                     {paginatedLateLogs.map((log: LateLog) => (
                       <tr
                         key={log.id}
-                        className="hover:bg-red-50/30 transition"
+                        className="hover:bg-red-50/30 transition-colors duration-150"
                       >
                         <td className="px-6 py-4">
                           <div>
-                            <h3 
+                            <h3
                               className="font-bold text-[#6d0f16] cursor-pointer hover:underline"
-                              onClick={() => fetchStudentHistory(log.student_id || '')}
+                              onClick={() =>
+                                log.student_id &&
+                                openHistoryModal({
+                                  id: log.id,
+                                  student_id: log.student_id,
+                                  name: log.name,
+                                  roll_no: log.roll_no,
+                                  phone: "",
+                                  department: log.department,
+                                  hostel: log.hostel || "",
+                                  place_of_visit: log.place_of_visit || "",
+                                  outpass_type: log.outpass_type || "",
+                                  outp_status: "",
+                                  std_status: log.std_status || "",
+                                  created_at: log.created_at || "",
+                                } as Outpass)
+                              }
                             >
-                              {log.name || "-"}
+                              <HighlightText text={log.name} query={search} />
                             </h3>
                             <p className="text-xs text-gray-400">
-                              {log.roll_no || "-"}
+                              <HighlightText text={log.roll_no} query={search} />
                             </p>
                           </div>
                         </td>
 
-                        <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                        <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden md:table-cell">
                           {log.hostel || "-"}
                         </td>
 
-                        <td className="px-6 py-4 text-xs font-medium text-gray-600">
+                        <td className="px-6 py-4 text-xs font-medium text-gray-600 hidden lg:table-cell">
                           {log.place_of_visit || "-"}
                         </td>
 
-                        <td className="px-6 py-4 text-xs text-gray-600 font-medium">
+                        <td className="px-6 py-4 text-xs text-gray-600 font-medium hidden lg:table-cell">
                           {log.departure_datetime
                             ? new Date(log.departure_datetime).toLocaleString("en-IN", {
                                 dateStyle: "short",
@@ -1216,7 +2095,7 @@ function Warden() {
                           </span>
                         </td>
 
-                        <td className="px-6 py-4">
+                        <td className="px-6 py-4 hidden sm:table-cell">
                           <span className="bg-red-100 text-red-800 border border-red-200/60 text-[11px] px-3 py-1 rounded-full font-bold">
                             ⚠️ {format12Hour(fromTime)} - {toTime ? format12Hour(toTime) : "End"}
                           </span>
@@ -1264,259 +2143,475 @@ function Warden() {
         )}
       </div>
 
-      {/* ================= COMPREHENSIVE STUDENT HISTORY MODAL ================= */}
-      {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-5xl h-[90vh] flex flex-col overflow-hidden animate-fadeIn">
-            
-            {/* MODAL HEADER */}
-            <div className="flex justify-between items-center p-6 border-b border-gray-200 bg-gray-50/80">
+      {/* ================= VIEW DETAILS DRAWER ================= */}
+
+      {drawerOpen && selectedOutpass && (
+        <div className="fixed inset-0 z-50 flex justify-end">
+          <div
+            className={`absolute inset-0 bg-black/40 transition-opacity duration-200 ${
+              drawerClosing ? "opacity-0" : "opacity-100"
+            }`}
+            onClick={closeDrawer}
+          />
+
+          <div
+            className={`relative w-full sm:w-[480px] max-w-full h-full bg-gray-50 shadow-2xl overflow-y-auto transition-transform duration-200 ease-out ${
+              drawerClosing ? "translate-x-full" : "translate-x-0"
+            }`}
+          >
+            <div className="bg-[#6d0f16] text-white px-6 py-5 sticky top-0 z-10 flex justify-between items-start">
               <div>
-                <h2 className="text-2xl font-bold text-[#6d0f16] flex items-center gap-2">
-                  Student 360° History
+                <h2 className="text-lg font-extrabold flex items-center flex-wrap gap-1">
+                  {selectedOutpass.name}
+                  {(selectedOutpass.is_emergency ||
+                    selectedOutpass.outpass_type === "Emergency") && (
+                    <span className="text-[10px] px-2 py-0.5 rounded-full border-2 border-white/70 font-bold ml-1">
+                      ⚡ Emergency
+                    </span>
+                  )}
                 </h2>
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mt-1">
-                  Complete view of outpasses, gate logs, and complaints
+                <p className="text-xs text-white/70 mt-0.5">
+                  {selectedOutpass.roll_no} • {selectedOutpass.department || "-"}
                 </p>
               </div>
-              <button 
-                onClick={() => setIsModalOpen(false)} 
-                className="w-10 h-10 rounded-full flex items-center justify-center bg-gray-200 hover:bg-red-100 hover:text-red-600 transition-colors cursor-pointer text-gray-600 font-bold"
+              <button
+                onClick={closeDrawer}
+                className="text-white/80 hover:text-white text-xl leading-none cursor-pointer"
               >
                 ✕
               </button>
             </div>
-            
-            {/* MODAL BODY */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {loadingHistory ? (
-                <div className="flex-1 flex items-center justify-center flex-col gap-4">
-                  <div className="w-10 h-10 border-4 border-gray-200 border-t-[#6d0f16] rounded-full animate-spin"></div>
-                  <p className="font-bold text-gray-500 uppercase text-xs tracking-wider">Fetching data across tables...</p>
+
+            <div className="p-6 space-y-6">
+              {/* STATUS */}
+              <div className="flex items-center gap-2">
+                <StatusPill pass={selectedOutpass} />
+                {detailLoading && (
+                  <span className="text-[11px] text-gray-400 font-semibold">
+                    Loading full details…
+                  </span>
+                )}
+              </div>
+
+              {detailError && (
+                <InlineError message={detailError} onRetry={retryDetail} />
+              )}
+
+              {/* STUDENT INFO */}
+              <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                  Student Information
+                </h3>
+                <dl className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
+                  <div>
+                    <dt className="text-gray-400 font-medium">Roll No</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.roll_no || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Department</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.department || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Hostel</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.hostel || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Room</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.room || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Phone</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.phone || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Email</dt>
+                    <dd className="font-semibold text-gray-800 truncate">{selectedOutpass.email || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Parent Contact</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.parent_contact || "-"}</dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* OUTPASS INFO */}
+              <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                  Outpass Details
+                </h3>
+                <dl className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
+                  <div>
+                    <dt className="text-gray-400 font-medium">Outpass Type</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.outpass_type || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Destination</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.place_of_visit || "-"}</dd>
+                  </div>
+                  <div className="col-span-2">
+                    <dt className="text-gray-400 font-medium">Purpose</dt>
+                    <dd className="font-semibold text-gray-800">{selectedOutpass.purpose || "-"}</dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Departure</dt>
+                    <dd className="font-semibold text-gray-800">
+                      {safeDate(selectedOutpass.departure_datetime)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Expected Arrival</dt>
+                    <dd className="font-semibold text-gray-800">
+                      {safeDate(selectedOutpass.arrival_datetime)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="text-gray-400 font-medium">Approval Timestamp</dt>
+                    <dd className="font-semibold text-gray-800">
+                      {safeDate(selectedOutpass.approved_at)}
+                    </dd>
+                  </div>
+                </dl>
+              </div>
+
+              {/* TIMELINE */}
+              <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5">
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-4">
+                  Complete Timeline
+                </h3>
+
+                {detailLoading && timelineEvents.length === 0 ? (
+                  <InlineSkeleton lines={4} />
+                ) : timelineEvents.length === 0 ? (
+                  <p className="text-xs text-gray-400">No timeline events available yet.</p>
+                ) : (
+                  <div>
+                    {timelineEvents.map((ev, i) => (
+                      <TimelineItem
+                        key={i}
+                        icon={ev.icon}
+                        title={ev.title}
+                        timestamp={ev.timestamp}
+                        description={ev.description}
+                        accent={ev.accent}
+                        isLast={i === timelineEvents.length - 1}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <button
+                onClick={() => openRemarksModal(selectedOutpass)}
+                className="w-full py-3 rounded-2xl bg-[#6d0f16] text-white text-xs font-bold hover:bg-[#5a0c12] transition cursor-pointer"
+              >
+                + Add Chief Warden Remark
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= CHIEF WARDEN REMARKS MODAL ================= */}
+
+      {remarksModalOpen && remarksTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 transition-opacity duration-200"
+            onClick={closeRemarksModal}
+          />
+
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-lg overflow-hidden animate-[fadeIn_0.15s_ease-out]">
+            <div className="bg-[#6d0f16] text-white px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-sm">Chief Warden Remarks</h2>
+                <p className="text-xs text-white/70">
+                  {remarksTarget.name} • {remarksTarget.roll_no}
+                </p>
+              </div>
+              <button
+                onClick={closeRemarksModal}
+                className="text-white/80 hover:text-white text-lg leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+              {detailError && (
+                <InlineError message={detailError} onRetry={retryDetail} />
+              )}
+
+              {/* PREVIOUS REMARKS */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Previous Remarks
+                </h3>
+
+                {detailLoading && !remarksByOutpass[remarksTarget.id] ? (
+                  <InlineSkeleton lines={2} />
+                ) : (remarksByOutpass[remarksTarget.id] || []).length === 0 ? (
+                  <p className="text-xs text-gray-400 italic">No remarks added yet.</p>
+                ) : (
+                  <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
+                    {(remarksByOutpass[remarksTarget.id] || [])
+                      .slice()
+                      .reverse()
+                      .map((r) => (
+                        <div
+                          key={r.id}
+                          className="bg-gray-50 border border-gray-200/80 rounded-xl p-3"
+                        >
+                          <p className="text-xs text-gray-700">{r.text}</p>
+                          <p className="text-[10px] text-gray-400 font-semibold mt-1">
+                            {r.author} • {safeDate(r.created_at)}
+                          </p>
+                        </div>
+                      ))}
+                  </div>
+                )}
+              </div>
+
+              {/* NEW REMARK */}
+              <div>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                  Add New Remark
+                </h3>
+                <textarea
+                  value={remarksText}
+                  onChange={(e) =>
+                    setRemarksText(e.target.value.slice(0, REMARKS_MAX_LEN))
+                  }
+                  rows={5}
+                  placeholder="Write a remark about this outpass..."
+                  className="w-full bg-gray-50/50 border border-gray-200 rounded-2xl px-4 py-3 text-sm outline-none focus:bg-white focus:border-[#6d0f16] transition resize-none"
+                />
+                <div className="flex justify-end mt-1">
+                  <span
+                    className={`text-[10px] font-semibold ${
+                      remarksText.length >= REMARKS_MAX_LEN
+                        ? "text-red-500"
+                        : "text-gray-400"
+                    }`}
+                  >
+                    {remarksText.length} / {REMARKS_MAX_LEN}
+                  </span>
                 </div>
-              ) : studentHistory ? (
+              </div>
+            </div>
+
+            <div className="px-6 py-4 border-t border-gray-100 flex justify-end gap-2">
+              <button
+                onClick={closeRemarksModal}
+                className="px-4 py-2 rounded-xl border border-gray-300 text-xs font-bold text-gray-600 hover:bg-gray-50 transition cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveRemark}
+                disabled={!remarksText.trim() || remarkSaving}
+                className="px-4 py-2 rounded-xl bg-[#6d0f16] text-white text-xs font-bold hover:bg-[#5a0c12] disabled:opacity-50 disabled:cursor-not-allowed transition cursor-pointer"
+              >
+                {remarkSaving ? "Saving…" : "Save Remark"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ================= HISTORY MODAL ================= */}
+
+      {historyModalOpen && historyTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <div
+            className="absolute inset-0 bg-black/40 transition-opacity duration-200"
+            onClick={closeHistoryModal}
+          />
+
+          <div className="relative bg-white rounded-3xl shadow-2xl w-full max-w-2xl overflow-hidden">
+            <div className="bg-[#6d0f16] text-white px-6 py-4 flex justify-between items-center">
+              <div>
+                <h2 className="font-bold text-sm">Student History</h2>
+                <p className="text-xs text-white/70">
+                  {historyTarget.name} • {historyTarget.roll_no}
+                </p>
+              </div>
+              <button
+                onClick={closeHistoryModal}
+                className="text-white/80 hover:text-white text-lg leading-none cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="p-6 space-y-5 max-h-[75vh] overflow-y-auto">
+              {historyLoading && (
+                <div className="space-y-5">
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-gray-50 rounded-2xl p-4">
+                      <InlineSkeleton lines={2} />
+                    </div>
+                    <div className="bg-gray-50 rounded-2xl p-4">
+                      <InlineSkeleton lines={2} />
+                    </div>
+                  </div>
+                  <InlineSkeleton lines={4} />
+                </div>
+              )}
+
+              {!historyLoading && historyError && (
+                <InlineError message={historyError} onRetry={retryHistory} />
+              )}
+
+              {!historyLoading && !historyError && historyResult && (
                 <>
-                  {/* MODAL TABS */}
-                  <div className="bg-white border-b border-gray-200 px-6 pt-4 flex gap-6 overflow-x-auto">
-                    <button
-                      onClick={() => setActiveModalTab("profile")}
-                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'profile' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
-                    >
-                      Profile & Academic
-                    </button>
-                    <button
-                      onClick={() => setActiveModalTab("outpasses")}
-                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'outpasses' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
-                    >
-                      Outpass Requests ({studentHistory.outpasses?.length || 0})
-                    </button>
-                    <button
-                      onClick={() => setActiveModalTab("logs")}
-                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'logs' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
-                    >
-                      Physical Gate Logs ({studentHistory.visit_logs?.length || 0})
-                    </button>
-                    <button
-                      onClick={() => setActiveModalTab("complaints")}
-                      className={`pb-4 font-bold text-sm tracking-wide transition-colors ${activeModalTab === 'complaints' ? 'text-[#6d0f16] border-b-2 border-[#6d0f16]' : 'text-gray-400 hover:text-gray-700'}`}
-                    >
-                      Complaints ({studentHistory.complaints?.length || 0})
-                    </button>
+                  {/* PROFILE */}
+                  <div className="bg-white rounded-2xl border border-gray-200/80 shadow-sm p-5">
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-3">
+                      Student Profile
+                    </h3>
+                    <dl className="grid grid-cols-2 gap-y-3 gap-x-4 text-xs">
+                      <div>
+                        <dt className="text-gray-400 font-medium">Roll No</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.roll_no || historyTarget.roll_no || "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-400 font-medium">Department</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.department || historyTarget.department || "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-400 font-medium">Hostel</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.hostel || historyTarget.hostel || "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-400 font-medium">Room</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.room || "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-400 font-medium">Phone</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.phone || historyTarget.phone || "-"}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt className="text-gray-400 font-medium">Parent Contact</dt>
+                        <dd className="font-semibold text-gray-800">
+                          {historyResult.profile?.parent_contact || "-"}
+                        </dd>
+                      </div>
+                    </dl>
                   </div>
 
-                  {/* MODAL CONTENT AREA */}
-                  <div className="flex-1 overflow-y-auto p-6 bg-gray-50">
-                    
-                    {/* TAB: PROFILE */}
-                    {activeModalTab === "profile" && (
-                      <div className="space-y-6 animate-fadeIn">
-                        <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                          <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Primary Information</h3>
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-y-6 gap-x-4">
-                            <div>
-                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Full Name</span>
-                              <span className="font-semibold text-lg text-gray-900">{studentHistory.profile.name}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Roll Number</span>
-                              <span className="font-semibold text-lg text-[#6d0f16]">{studentHistory.profile.roll_no}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Phone Number</span>
-                              <span className="font-semibold text-sm text-gray-800">{studentHistory.profile.phone || 'N/A'}</span>
-                            </div>
-                            <div>
-                              <span className="block text-[10px] text-gray-400 font-bold uppercase">Email Address</span>
-                              <span className="font-semibold text-sm text-gray-800 break-all">{studentHistory.profile.email}</span>
-                            </div>
-                          </div>
-                        </div>
+                  {/* SUMMARY COUNTS */}
+                  <div className="grid grid-cols-2 gap-3">
+                    <div className="bg-green-50 border border-green-200/60 rounded-2xl p-4 text-center">
+                      <p className="text-2xl font-extrabold text-green-700">
+                        {historyResult.outpasses.filter((p) => p.outp_status === "Approved").length}
+                      </p>
+                      <p className="text-[11px] font-bold text-green-700/70 uppercase tracking-wider">
+                        Approved Outpasses
+                      </p>
+                    </div>
+                    <div className="bg-red-50 border border-red-200/60 rounded-2xl p-4 text-center">
+                      <p className="text-2xl font-extrabold text-red-700">
+                        {historyResult.outpasses.filter((p) => p.outp_status === "Rejected").length}
+                      </p>
+                      <p className="text-[11px] font-bold text-red-700/70 uppercase tracking-wider">
+                        Rejected Outpasses
+                      </p>
+                    </div>
+                  </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Housing details</h3>
-                            <div className="space-y-4">
-                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Hostel</span>
-                                <span className="font-bold text-gray-900">{studentHistory.profile.hostel}</span>
-                              </div>
-                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Room Number</span>
-                                <span className="font-bold text-gray-900">{studentHistory.profile.room || 'Not Assigned'}</span>
-                              </div>
-                            </div>
+                  {/* PREVIOUS OUTPASSES */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                      Previous Outpasses ({historyResult.outpasses.length})
+                    </h3>
+                    {historyResult.outpasses.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">No previous outpasses.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {historyResult.outpasses.map((p) => (
+                          <div
+                            key={p.id}
+                            className="flex justify-between items-center bg-gray-50 rounded-xl px-3 py-2"
+                          >
+                            <span className="text-xs text-gray-700">
+                              {p.place_of_visit || "-"} • {p.outpass_type}
+                            </span>
+                            <StatusPill pass={p} />
                           </div>
-
-                          <div className="bg-white rounded-2xl border border-gray-200 p-6 shadow-sm">
-                            <h3 className="text-sm font-bold uppercase tracking-wider text-gray-500 mb-6 pb-2 border-b border-gray-100">Academic details</h3>
-                            <div className="space-y-4">
-                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Department</span>
-                                <span className="font-bold text-gray-900">{studentHistory.profile.department || 'N/A'}</span>
-                              </div>
-                              <div className="flex justify-between items-center bg-gray-50 p-3 rounded-xl">
-                                <span className="text-xs font-bold text-gray-500 uppercase">Degree Type</span>
-                                <span className="font-bold text-gray-900">{studentHistory.profile.degree_type || 'N/A'}</span>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
+                        ))}
                       </div>
                     )}
+                  </div>
 
-                    {/* TAB: OUTPASSES */}
-                    {activeModalTab === "outpasses" && (
-                      <div className="animate-fadeIn space-y-4">
-                        {studentHistory.outpasses?.length > 0 ? (
-                          studentHistory.outpasses.map((op: any) => (
-                            <div key={op.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row gap-6">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-1 bg-gray-100 text-gray-600 rounded">
-                                    {op.outpass_type}
-                                  </span>
-                                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                                    op.outp_status === 'Approved' ? 'bg-green-50 text-green-700 border-green-200' :
-                                    op.outp_status === 'Rejected' ? 'bg-red-50 text-red-700 border-red-200' :
-                                    'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}>
-                                    {op.outp_status}
-                                  </span>
-                                  {op.is_emergency && <span className="text-[10px] font-bold uppercase px-2 py-1 bg-red-100 text-red-700 rounded border border-red-200">Emergency</span>}
-                                </div>
-                                <h4 className="font-bold text-gray-900 mt-2 mb-1">
-                                  Dest: <span className="font-normal text-gray-700">{op.destination || op.place_of_visit}</span>
-                                </h4>
-                                <p className="text-sm text-gray-500 italic">"{op.purpose || op.reason}"</p>
-                              </div>
-                              <div className="md:w-64 bg-gray-50 rounded-xl p-4 border border-gray-100 space-y-2 text-xs">
-                                <div className="flex justify-between">
-                                  <span className="font-bold text-gray-400 uppercase tracking-wider">Applied</span>
-                                  <span className="font-medium text-gray-800">{new Date(op.created_at || op.date_created).toLocaleDateString()}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="font-bold text-gray-400 uppercase tracking-wider">From</span>
-                                  <span className="font-medium text-gray-800">{new Date(op.departure_datetime || op.date_from).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                  <span className="font-bold text-gray-400 uppercase tracking-wider">To</span>
-                                  <span className="font-medium text-gray-800">{new Date(op.arrival_datetime || op.date_to).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" })}</span>
-                                </div>
-                              </div>
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-12 text-gray-400">
-                            <span className="text-4xl block mb-3">🎫</span>
-                            <span className="font-medium">No outpasses generated by this student.</span>
+                  {/* PREVIOUS COMPLAINTS (from history endpoint, not local filtering) */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                      Previous Complaints ({historyResult.complaints.length})
+                    </h3>
+                    {historyResult.complaints.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">No previous complaints.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {historyResult.complaints.map((c) => (
+                          <div key={c.id} className="bg-gray-50 rounded-xl px-3 py-2">
+                            <p className="text-xs font-semibold text-gray-700">{c.title || "Complaint"}</p>
+                            <p className="text-[11px] text-gray-500 line-clamp-1">{c.description}</p>
                           </div>
-                        )}
+                        ))}
                       </div>
                     )}
+                  </div>
 
-                    {/* TAB: LOGS */}
-                    {activeModalTab === "logs" && (
-                      <div className="animate-fadeIn space-y-4">
-                        {studentHistory.visit_logs?.length > 0 ? (
-                          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
-                            <table className="w-full text-sm text-left">
-                              <thead className="bg-gray-50 text-[10px] uppercase tracking-wider text-gray-400 font-bold border-b border-gray-100">
-                                <tr>
-                                  <th className="px-6 py-4">Action</th>
-                                  <th className="px-6 py-4">Destination</th>
-                                  <th className="px-6 py-4">Gate</th>
-                                  <th className="px-6 py-4">Exit Time</th>
-                                  <th className="px-6 py-4">Entry Time</th>
-                                  <th className="px-6 py-4">Remarks</th>
-                                </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-100">
-                                {studentHistory.visit_logs.map((log: any) => (
-                                  <tr key={log.id} className="hover:bg-gray-50/50">
-                                    <td className="px-6 py-4">
-                                      <span className="bg-gray-100 text-gray-600 px-2 py-1 rounded font-bold text-[10px] uppercase">{log.outpass_type}</span>
-                                    </td>
-                                    <td className="px-6 py-4 font-medium text-gray-800">{log.destination || log.place_of_visit || '-'}</td>
-                                    <td className="px-6 py-4 text-gray-600 font-medium">{log.gate || '-'}</td>
-                                    <td className="px-6 py-4 text-orange-600 font-semibold">
-                                      {log.actual_departure ? new Date(log.actual_departure).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 text-emerald-600 font-semibold">
-                                      {log.actual_arrival ? new Date(log.actual_arrival).toLocaleString("en-IN", { dateStyle: "short", timeStyle: "short" }) : '-'}
-                                    </td>
-                                    <td className="px-6 py-4 text-gray-500 italic text-xs">{log.remarks || '-'}</td>
-                                  </tr>
-                                ))}
-                              </tbody>
-                            </table>
+                  {/* PREVIOUS VISIT LOGS */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                      Previous Visit Logs ({historyResult.visit_logs.length})
+                    </h3>
+                    {historyResult.visit_logs.length === 0 ? (
+                      <p className="text-xs text-gray-400 italic">No previous visit logs.</p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        {historyResult.visit_logs.map((l) => (
+                          <div
+                            key={l.id}
+                            className="flex justify-between items-center bg-gray-50 rounded-xl px-3 py-2"
+                          >
+                            <span className="text-xs text-gray-700">{l.place_of_visit || "-"}</span>
+                            <span className="text-[11px] text-gray-500">
+                              {safeDate(l.arrival_datetime)}
+                            </span>
                           </div>
-                        ) : (
-                          <div className="text-center py-12 text-gray-400">
-                            <span className="text-4xl block mb-3">🚪</span>
-                            <span className="font-medium">No physical gate movements found.</span>
-                          </div>
-                        )}
+                        ))}
                       </div>
                     )}
+                  </div>
 
-                    {/* TAB: COMPLAINTS */}
-                    {activeModalTab === "complaints" && (
-                      <div className="animate-fadeIn space-y-4">
-                        {studentHistory.complaints?.length > 0 ? (
-                          studentHistory.complaints.map((comp: any) => (
-                            <div key={comp.id} className="bg-white rounded-2xl border border-gray-200 p-5 shadow-sm flex flex-col md:flex-row gap-6">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-2 mb-2">
-                                  <span className={`text-[10px] font-bold uppercase tracking-wider px-2 py-1 rounded border ${
-                                    comp.status === 'resolved' ? 'bg-green-50 text-green-700 border-green-200' : 'bg-amber-50 text-amber-700 border-amber-200'
-                                  }`}>
-                                    {comp.status}
-                                  </span>
-                                  <span className="text-xs text-gray-400 font-medium">{new Date(comp.date_created).toLocaleDateString()}</span>
-                                </div>
-                                <h4 className="font-bold text-gray-900 text-base">{comp.title}</h4>
-                                <p className="text-sm text-gray-600 mt-2">{comp.description}</p>
-                              </div>
-                              {comp.resolved_description && (
-                                <div className="md:w-1/3 bg-gray-50 rounded-xl p-4 border border-gray-100">
-                                  <span className="block text-[10px] text-gray-400 font-bold uppercase mb-1">Resolution</span>
-                                  <p className="text-xs text-gray-700">{comp.resolved_description}</p>
-                                </div>
-                              )}
-                            </div>
-                          ))
-                        ) : (
-                          <div className="text-center py-12 text-gray-400">
-                            <span className="text-4xl block mb-3">🗣️</span>
-                            <span className="font-medium">No complaints raised by this student.</span>
-                          </div>
-                        )}
-                      </div>
-                    )}
-
+                  {/* REMARKS - requires backend support */}
+                  <div>
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-gray-400 mb-2">
+                      Remarks History
+                    </h3>
+                    <p className="text-[11px] text-gray-400 italic">
+                      Not included in{" "}
+                      <code className="bg-gray-100 px-1 rounded">
+                        GET /api/students/:id/history
+                      </code>
+                      . Open an individual outpass's Remarks panel to view its
+                      remarks, or ask backend to add remarks to this response.
+                    </p>
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
         </div>
@@ -1525,4 +2620,4 @@ function Warden() {
   );
 }
 
-export default Warden;
+export default ChiefWarden;

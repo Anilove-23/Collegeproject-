@@ -103,6 +103,29 @@ export default function PendingPage() {
   }
 
   // ===========================
+  // View (fetch full outpass details)
+  // ===========================
+
+  async function handleView(outpass) {
+    try {
+      const result = await apiFetch(
+        `/api/students/outpass/${outpass.id}`
+      );
+
+      setSelected(result.data);
+    } catch (err) {
+      console.error(err);
+
+      setToast({
+        type: "error",
+        message:
+          err.message ||
+          "Failed to fetch outpass details",
+      });
+    }
+  }
+
+  // ===========================
   // Effects
   // ===========================
 
@@ -322,7 +345,7 @@ export default function PendingPage() {
 
   if (error) {
     return (
-      <div className="p-8">
+      <div className="p-4 sm:p-6">
         <div className="bg-red-50 border border-red-200 rounded-xl p-4 text-red-600">
           {error}
         </div>
@@ -335,7 +358,7 @@ export default function PendingPage() {
   // ===========================
 
   return (
-    <div className="p-6 space-y-5 relative">
+    <div className="p-4 sm:p-6 space-y-5 relative">
       <Header
         title="Pending Outpasses"
         subtitle="Review, approve or reject hostel outpass requests"
@@ -377,7 +400,7 @@ export default function PendingPage() {
         allSelected={allSelected}
         toggleSelectAll={toggleSelectAll}
         toggleRow={toggleRow}
-        onView={setSelected}
+        onView={handleView}
         onApprove={approve}
         onReject={reject}
       />
@@ -392,7 +415,8 @@ export default function PendingPage() {
 
       {selected && (
         <OutpassModal
-          outpass={selected}
+          outpass={selected?.outpass}
+          remarks={selected?.remarks}
           onClose={() => setSelected(null)}
         />
       )}

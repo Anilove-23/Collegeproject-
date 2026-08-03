@@ -35,7 +35,8 @@ export function useNetwork() {
 
   // Poll pending count every 5 seconds to keep badge accurate
   useEffect(() => {
-    refreshPending();
+    // Run initial fetch on next tick to avoid React's synchronous setState warning
+    setTimeout(() => refreshPending(), 0);
     const interval = setInterval(refreshPending, 5000);
     return () => clearInterval(interval);
   }, [refreshPending]);
