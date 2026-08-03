@@ -233,7 +233,7 @@ function Login() {
       setError("");
 
       const data =
-        (await apiFetch("/api/auth/verify-otp", {
+        (await apiFetch("/api/auth/verify-login-otp", {
           method: "POST",
           body: JSON.stringify({
             email: formData.email,
