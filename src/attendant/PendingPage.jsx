@@ -289,7 +289,7 @@ export default function PendingPage() {
           {
             method: "PATCH",
             body: JSON.stringify({
-              outpass_ids: ids,
+              ids: ids,
               action,
               remark,
             }),

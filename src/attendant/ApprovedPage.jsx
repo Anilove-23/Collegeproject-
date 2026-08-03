@@ -64,14 +64,6 @@ export default function ApprovedPage() {
           }),
         }
       );
-  `/api/students/hostel-status?page=${currentPage}&limit=${limit}`,
-  {
-    method: "POST",
-    body: JSON.stringify({
-      outp_status: "Approved",
-    }),
-  }
-);
 
       setData(result?.data?.outpasses || []);
 

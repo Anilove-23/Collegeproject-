@@ -44,6 +44,7 @@ import ChiefWardenAllocationPage from "./chief-warden/chief-warden.tsx";
 import Warden from "./warden/warden";
 
 /* ================= LOGS ================= */
+import LogsPage from "./logs/LogsPage.jsx";
 
 /* ================= ERROR PAGE ================= */
 function ErrorPage() {
@@ -190,6 +191,11 @@ const router = createBrowserRouter([
     errorElement: <ErrorPage />,
   },
 
+  {
+    path: "/logs",
+    element: <LogsPage />,
+    errorElement: <ErrorPage />,
+  },
   {
     path: "*",
     element: <ErrorPage />,
