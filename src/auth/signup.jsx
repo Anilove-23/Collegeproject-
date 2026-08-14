@@ -85,7 +85,7 @@ const [acceptedPrivacy, setAcceptedPrivacy] =
 
         const data =
           await apiFetch(
-            "/api/hostels"
+            "/api/auth/hostels"
           );
 
         setHostels(
